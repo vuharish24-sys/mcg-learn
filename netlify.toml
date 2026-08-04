@@ -1,0 +1,10 @@
+[build]
+  command = "npm run db:generate && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NPM_FLAGS = "--include=dev"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

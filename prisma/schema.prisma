@@ -1,0 +1,847 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum FeedType {
+  ARTICLE
+  YOUTUBE
+  INSTAGRAM_REEL
+  PDF
+  QUIZ
+  CAREER_TIP
+  ANNOUNCEMENT
+  WEBINAR
+  ADVERTISEMENT
+  SPONSORED
+  INTERNAL_PROMOTION
+}
+
+/** Where a feed item is allowed to render. FEED = today's default (main feed). */
+enum FeedPlacement {
+  FEED
+  LEARNING_PATH_LIST
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  FOLLOW_UP
+  ADMITTED
+  CLOSED
+}
+
+enum TrainerStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+  REJECTED
+}
+
+enum ReferralProfileStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ReferralCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+  ARCHIVED
+}
+
+enum ReferralCommissionType {
+  FLAT
+  PERCENTAGE
+  HYBRID
+}
+
+enum ReferralCommissionBasis {
+  COURSE_FEE
+  ADMISSION_FEE
+  INSTALLMENT_AMOUNT
+  CUSTOM_AMOUNT
+}
+
+enum ReferralMilestoneTrigger {
+  ADMISSION_CONFIRMED
+  REGISTRATION_FEE_PAID
+  FIRST_INSTALLMENT_PAID
+  SECOND_INSTALLMENT_PAID
+  THIRD_INSTALLMENT_PAID
+  FULL_FEE_PAID
+  MANUAL
+  MANUAL_APPROVAL
+}
+
+enum ReferralMilestoneCalcType {
+  FLAT
+  PERCENTAGE
+}
+
+enum ReferralCommissionTxnStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum ReferralPaymentMethod {
+  UPI
+  BANK_TRANSFER
+  CASH
+  CHEQUE
+  OTHER
+}
+
+enum ReferralParticipantStatus {
+  ACTIVE
+  INACTIVE
+  LEFT
+}
+
+enum ReferralMilestoneStatus {
+  PENDING
+  ACHIEVED
+  APPROVED
+  PAID
+  EXPIRED
+  REJECTED
+  CANCELLED
+}
+
+enum ReferralCampaignAssetType {
+  BANNER
+  THUMBNAIL
+  MOBILE_BANNER
+  PROMOTIONAL_POSTER
+  STORY_IMAGE
+  EMAIL_BANNER
+}
+
+enum AdvertisementStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum LearningPathStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LearningPathVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum LearningPathDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum UserLearningStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  name        String
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id            String        @id @db.Uuid
+  email         String        @unique
+  fullName      String        @map("full_name")
+  avatarUrl     String?       @map("avatar_url")
+  phone         String?
+  dateOfBirth   DateTime?     @map("date_of_birth") @db.Date
+  qualification String?
+  fieldOfStudy  String?       @map("field_of_study")
+  yearsExperience Int?        @map("years_experience")
+  careerGoal    String?       @map("career_goal")
+  preferredLearningMode String? @map("preferred_learning_mode")
+  city          String?
+  country       String?
+  advisingNotes String?       @map("advising_notes")
+  roleId        String        @map("role_id")
+  role          Role          @relation(fields: [roleId], references: [id])
+  isActive      Boolean       @default(true) @map("is_active")
+  assignedLeads Lead[]        @relation("AssignedOfficer")
+  trainer       Trainer?
+  referralsMade Referral[]    @relation("Referrer")
+  referredBy    Referral?     @relation("ReferredUser")
+  referralProfile ReferralProfile?
+  certificates       Certificate[]
+  leadNotes          LeadNote[]
+  learningProgress   UserLearningProgress[]
+  pathItemCompletions UserPathItemCompletion[]
+  quizAttempts       QuizAttempt[]
+  commissionTxnsApproved ReferralCommissionTransaction[] @relation("CommissionApprovedBy")
+  commissionPaymentsPaid ReferralCommissionPayment[]     @relation("CommissionPaidBy")
+  commissionAuditEvents  ReferralCommissionAuditEvent[]  @relation("CommissionAuditActor")
+  campaignParticipations ReferralCampaignParticipant[]
+  referralMilestonesExtended ReferralMilestone[]         @relation("ReferralMilestoneExtendedBy")
+  campaignTermsAccepted  ReferralCampaignParticipant[]   @relation("CampaignTermsAcceptedBy")
+  paymentProofsUploaded  ReferralPaymentAttachment[]     @relation("PaymentProofUploadedBy")
+  campaignAuditEvents    ReferralCampaignAuditLog[]      @relation("CampaignAuditActor")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model FeedCategory {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  isActive    Boolean    @default(true) @map("is_active")
+  feedItems   FeedItem[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("feed_categories")
+}
+
+model FeedItem {
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  thumbnailUrl  String?        @map("thumbnail_url")
+  categoryId    String         @map("category_id")
+  category      FeedCategory   @relation(fields: [categoryId], references: [id])
+  type          FeedType
+  externalUrl   String?        @map("external_url")
+  content       Json?
+  previewTitle       String?   @map("preview_title")
+  previewDescription String?   @map("preview_description")
+  previewImageUrl    String?   @map("preview_image_url")
+  previewSiteName    String?   @map("preview_site_name")
+  previewFetchedAt   DateTime? @map("preview_fetched_at")
+  publishedAt   DateTime?      @map("published_at")
+  status        PublishStatus  @default(DRAFT)
+  priority      Int            @default(0)
+  isFeatured    Boolean        @default(false) @map("is_featured")
+  viewCount     Int            @default(0) @map("view_count")
+  placements    FeedPlacement[] @default([FEED])
+  advertisement        Advertisement?
+  learningPathItems    LearningPathItem[]
+  requiredForPaths     LearningPath[]             @relation("RequiredQuizPath")
+  pathItemCompletions UserPathItemCompletion[]
+  quizAttempts         QuizAttempt[]
+  campaignFeedLinks    CampaignFeedLink[]
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@index([type])
+  @@map("feed_items")
+}
+
+model Lead {
+  id                String     @id @default(cuid())
+  fullName          String     @map("full_name")
+  email             String?
+  phone             String
+  status            LeadStatus @default(NEW)
+  assignedOfficerId String?    @db.Uuid @map("assigned_officer_id")
+  assignedOfficer   User?      @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+  followUpAt        DateTime?  @map("follow_up_at")
+  source            String
+  notes             LeadNote[]
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([assignedOfficerId])
+  @@index([followUpAt])
+  @@map("leads")
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String   @map("lead_id")
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String   @db.Uuid @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([leadId])
+  @@map("lead_notes")
+}
+
+model Trainer {
+  id              String        @id @default(cuid())
+  userId          String?       @unique @db.Uuid @map("user_id")
+  user            User?         @relation(fields: [userId], references: [id])
+  fullName        String        @map("full_name")
+  email           String        @unique
+  phone           String?
+  bio             String?
+  experienceYears Int           @default(0) @map("experience_years")
+  specializations String[]
+  availability    String
+  status          TrainerStatus @default(PENDING)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("trainers")
+}
+
+model Referral {
+  id             String         @id @default(cuid())
+  referrerId     String         @db.Uuid @map("referrer_id")
+  referrer       User           @relation("Referrer", fields: [referrerId], references: [id])
+  referredUserId String?        @unique @db.Uuid @map("referred_user_id")
+  referredUser   User?          @relation("ReferredUser", fields: [referredUserId], references: [id])
+  code           String         @unique
+  referredEmail  String?        @map("referred_email")
+  referredPhone  String?        @map("referred_phone")
+  referredName   String?        @map("referred_name")
+  status         ReferralStatus @default(PENDING)
+  commissionTransactions ReferralCommissionTransaction[]
+  referralMilestones     ReferralMilestone[]
+  campaignEnrollments    ReferralCampaignEnrollment[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([referrerId])
+  @@map("referrals")
+}
+
+model ReferralCampaign {
+  id                     String                   @id @default(cuid())
+  name                   String
+  shortTitle             String?                  @map("short_title")
+  description            String?
+  campaignCode           String                   @unique @map("campaign_code")
+  startsAt               DateTime                 @map("starts_at")
+  endsAt                 DateTime                 @map("ends_at")
+  registrationStartsAt   DateTime?                @map("registration_starts_at")
+  registrationEndsAt     DateTime?                @map("registration_ends_at")
+  referralStartsAt       DateTime?                @map("referral_starts_at")
+  referralEndsAt         DateTime?                @map("referral_ends_at")
+  status                 ReferralCampaignStatus   @default(DRAFT)
+  priority               Int                      @default(0)
+  maxReferrals           Int?                     @map("max_referrals")
+  isActive               Boolean                  @default(true) @map("is_active")
+  termsVersion           String                   @map("terms_version")
+  commissionType         ReferralCommissionType   @map("commission_type")
+  commissionBasis        ReferralCommissionBasis  @map("commission_basis")
+  publishAsFeed          Boolean                  @default(false) @map("publish_as_feed")
+  clonedFromId           String?                  @map("cloned_from_id")
+  clonedFrom             ReferralCampaign?        @relation("CampaignClones", fields: [clonedFromId], references: [id])
+  clones                 ReferralCampaign[]       @relation("CampaignClones")
+  milestones             ReferralCampaignMilestone[]
+  courses                ReferralCampaignCourse[]
+  transactions           ReferralCommissionTransaction[]
+  assets                 ReferralCampaignAsset[]
+  terms                  ReferralCampaignTerms[]
+  faqs                   ReferralCampaignFaq[]
+  participants           ReferralCampaignParticipant[]
+  enrollments            ReferralCampaignEnrollment[]
+  referralMilestones     ReferralMilestone[]
+  feedLinks              CampaignFeedLink[]
+  auditLogs              ReferralCampaignAuditLog[]
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+
+  @@index([status, startsAt, endsAt])
+  @@index([priority])
+  @@index([isActive])
+  @@map("referral_campaigns")
+}
+
+model ReferralCampaignCourse {
+  id             String           @id @default(cuid())
+  campaignId     String           @map("campaign_id")
+  campaign       ReferralCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  learningPathId String           @map("learning_path_id")
+  learningPath   LearningPath     @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, learningPathId])
+  @@map("referral_campaign_courses")
+}
+
+model ReferralCampaignMilestone {
+  id                String                    @id @default(cuid())
+  campaignId        String                    @map("campaign_id")
+  campaign          ReferralCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name              String
+  sequence          Int
+  trigger           ReferralMilestoneTrigger
+  calculationType   ReferralMilestoneCalcType @map("calculation_type")
+  value             Decimal                   @db.Decimal(12, 4)
+  commissionBasis   ReferralCommissionBasis?  @map("commission_basis")
+  defaultDueDays    Int?                      @map("default_due_days")
+  defaultExpiryDays Int?                      @map("default_expiry_days")
+  allowOverride     Boolean                   @default(true) @map("allow_override")
+  allowExtension    Boolean                   @default(true) @map("allow_extension")
+  maxExtensionDays  Int?                      @map("max_extension_days")
+  autoExpire        Boolean                   @default(true) @map("auto_expire")
+  isActive          Boolean                   @default(true) @map("is_active")
+  transactions      ReferralCommissionTransaction[]
+  referralMilestones ReferralMilestone[]
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  @@unique([campaignId, sequence])
+  @@index([campaignId, trigger])
+  @@map("referral_campaign_milestones")
+}
+
+model ReferralCampaignAsset {
+  id         String                   @id @default(cuid())
+  campaignId String                   @map("campaign_id")
+  campaign   ReferralCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  assetType  ReferralCampaignAssetType @map("asset_type")
+  fileName   String                   @map("file_name")
+  fileUrl    String                   @map("file_url")
+  fileType   String?                  @map("file_type")
+  fileSize   Int?                     @map("file_size")
+  sortOrder  Int                      @default(0) @map("sort_order")
+  isActive   Boolean                  @default(true) @map("is_active")
+  createdAt  DateTime                 @default(now()) @map("created_at")
+  updatedAt  DateTime                 @updatedAt @map("updated_at")
+
+  @@index([campaignId, assetType])
+  @@map("referral_campaign_assets")
+}
+
+model ReferralCampaignTerms {
+  id            String           @id @default(cuid())
+  campaignId    String           @map("campaign_id")
+  campaign      ReferralCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  version       String
+  content       String
+  effectiveDate DateTime         @map("effective_date")
+  isCurrent     Boolean          @default(true) @map("is_current")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  @@unique([campaignId, version])
+  @@index([campaignId, isCurrent])
+  @@map("referral_campaign_terms")
+}
+
+model ReferralCampaignFaq {
+  id         String           @id @default(cuid())
+  campaignId String           @map("campaign_id")
+  campaign   ReferralCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  question   String
+  answer     String
+  sortOrder  Int              @default(0) @map("sort_order")
+  isActive   Boolean          @default(true) @map("is_active")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  @@index([campaignId, sortOrder])
+  @@map("referral_campaign_faqs")
+}
+
+model ReferralCampaignParticipant {
+  id               String                   @id @default(cuid())
+  campaignId       String                   @map("campaign_id")
+  campaign         ReferralCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId           String                   @db.Uuid @map("user_id")
+  user             User                     @relation(fields: [userId], references: [id])
+  status           ReferralParticipantStatus @default(ACTIVE)
+  termsAccepted    Boolean                  @map("terms_accepted")
+  termsVersion     String                   @map("terms_version")
+  acceptedAt       DateTime                 @map("accepted_at")
+  acceptedById     String                   @db.Uuid @map("accepted_by_id")
+  acceptedBy       User                     @relation("CampaignTermsAcceptedBy", fields: [acceptedById], references: [id])
+  joinedAt         DateTime                 @default(now()) @map("joined_at")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+
+  @@unique([campaignId, userId])
+  @@index([userId, status])
+  @@map("referral_participants")
+}
+
+model ReferralCampaignEnrollment {
+  id         String           @id @default(cuid())
+  campaignId String           @map("campaign_id")
+  campaign   ReferralCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  referralId String           @map("referral_id")
+  referral   Referral         @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  enrolledAt DateTime         @default(now()) @map("enrolled_at")
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@unique([campaignId, referralId])
+  @@index([referralId])
+  @@map("referral_campaign_enrollments")
+}
+
+model ReferralMilestone {
+  id                   String                    @id @default(cuid())
+  referralId           String                    @map("referral_id")
+  referral             Referral                  @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  campaignId           String                    @map("campaign_id")
+  campaign             ReferralCampaign          @relation(fields: [campaignId], references: [id])
+  campaignMilestoneId  String                    @map("campaign_milestone_id")
+  campaignMilestone    ReferralCampaignMilestone @relation(fields: [campaignMilestoneId], references: [id])
+  name                 String
+  sequence             Int
+  trigger              ReferralMilestoneTrigger
+  calculationType      ReferralMilestoneCalcType @map("calculation_type")
+  value                Decimal                   @db.Decimal(12, 4)
+  commissionBasis      ReferralCommissionBasis   @map("commission_basis")
+  dueDate              DateTime?                 @map("due_date")
+  expiryDate           DateTime?                 @map("expiry_date")
+  unlockedAt           DateTime?                 @map("unlocked_at")
+  status               ReferralMilestoneStatus   @default(PENDING)
+  achievedAt           DateTime?                 @map("achieved_at")
+  approvedAt           DateTime?                 @map("approved_at")
+  paidAt               DateTime?                 @map("paid_at")
+  extendedById         String?                   @db.Uuid @map("extended_by_id")
+  extendedBy           User?                     @relation("ReferralMilestoneExtendedBy", fields: [extendedById], references: [id])
+  extensionDate        DateTime?                 @map("extension_date")
+  extensionReason      String?                   @map("extension_reason")
+  remarks              String?
+  commissionTransaction ReferralCommissionTransaction?
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+
+  @@unique([referralId, campaignMilestoneId])
+  @@index([campaignId, status])
+  @@index([expiryDate, status])
+  @@map("referral_milestones")
+}
+
+model ReferralCommissionTransaction {
+  id                   String                       @id @default(cuid())
+  referralId           String                       @map("referral_id")
+  referral             Referral                     @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  campaignId           String                       @map("campaign_id")
+  campaign             ReferralCampaign             @relation(fields: [campaignId], references: [id])
+  milestoneId          String                       @map("milestone_id")
+  milestone            ReferralCampaignMilestone    @relation(fields: [milestoneId], references: [id])
+  referralMilestoneId  String?                      @unique @map("referral_milestone_id")
+  referralMilestone    ReferralMilestone?           @relation(fields: [referralMilestoneId], references: [id])
+  learningPathId       String?                      @map("learning_path_id")
+  learningPath         LearningPath?                @relation(fields: [learningPathId], references: [id])
+  calculationType      ReferralMilestoneCalcType    @map("calculation_type")
+  value                Decimal                      @db.Decimal(12, 4)
+  paymentBasisAmount   Decimal                      @map("payment_basis_amount") @db.Decimal(12, 2)
+  calculatedAmount     Decimal                      @map("calculated_amount") @db.Decimal(12, 2)
+  commissionBasis      ReferralCommissionBasis      @map("commission_basis")
+  trigger              ReferralMilestoneTrigger
+  transactionDate      DateTime                     @default(now()) @map("transaction_date")
+  status               ReferralCommissionTxnStatus  @default(PENDING)
+  approvedById         String?                      @db.Uuid @map("approved_by_id")
+  approvedBy           User?                        @relation("CommissionApprovedBy", fields: [approvedById], references: [id])
+  approvedAt           DateTime?                    @map("approved_at")
+  paidAt               DateTime?                    @map("paid_at")
+  statusReason         String?                      @map("status_reason")
+  payment              ReferralCommissionPayment?
+  auditEvents          ReferralCommissionAuditEvent[]
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+
+  @@unique([referralId, milestoneId])
+  @@index([status, transactionDate])
+  @@index([campaignId])
+  @@index([referralId])
+  @@map("referral_commission_transactions")
+}
+
+model ReferralCommissionPayment {
+  id              String                         @id @default(cuid())
+  transactionId   String                         @unique @map("transaction_id")
+  transaction     ReferralCommissionTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  paymentDate     DateTime                       @map("payment_date")
+  amountPaid      Decimal                        @map("amount_paid") @db.Decimal(12, 2)
+  paymentMethod   ReferralPaymentMethod          @map("payment_method")
+  referenceNumber String?                        @map("reference_number")
+  remarks         String?
+  paidById        String                         @db.Uuid @map("paid_by_id")
+  paidBy          User                           @relation("CommissionPaidBy", fields: [paidById], references: [id])
+  attachments     ReferralPaymentAttachment[]
+  createdAt       DateTime                       @default(now()) @map("created_at")
+  updatedAt       DateTime                       @updatedAt @map("updated_at")
+
+  @@index([paymentDate])
+  @@map("referral_commission_payments")
+}
+
+model ReferralPaymentAttachment {
+  id           String                    @id @default(cuid())
+  paymentId    String                    @map("payment_id")
+  payment      ReferralCommissionPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  fileName     String                    @map("file_name")
+  fileUrl      String                    @map("file_url")
+  fileType     String                    @map("file_type")
+  fileSize     Int?                      @map("file_size")
+  uploadedById String                    @db.Uuid @map("uploaded_by_id")
+  uploadedBy   User                      @relation("PaymentProofUploadedBy", fields: [uploadedById], references: [id])
+  uploadedAt   DateTime                  @default(now()) @map("uploaded_at")
+
+  @@index([paymentId])
+  @@map("referral_payment_attachments")
+}
+
+model CampaignFeedLink {
+  id         String           @id @default(cuid())
+  campaignId String           @map("campaign_id")
+  campaign   ReferralCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  feedItemId String           @map("feed_item_id")
+  feedItem   FeedItem         @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@unique([campaignId, feedItemId])
+  @@map("campaign_feed_links")
+}
+
+model ReferralCommissionAuditEvent {
+  id            String                        @id @default(cuid())
+  transactionId String?                       @map("transaction_id")
+  transaction   ReferralCommissionTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  campaignId    String?                       @map("campaign_id")
+  actorId       String?                       @db.Uuid @map("actor_id")
+  actor         User?                         @relation("CommissionAuditActor", fields: [actorId], references: [id])
+  action        String
+  details       Json?
+  createdAt     DateTime                      @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([transactionId])
+  @@map("referral_commission_audit_events")
+}
+
+model ReferralCampaignAuditLog {
+  id         String           @id @default(cuid())
+  campaignId String?          @map("campaign_id")
+  campaign   ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  actorId    String?          @db.Uuid @map("actor_id")
+  actor      User?            @relation("CampaignAuditActor", fields: [actorId], references: [id])
+  action     String
+  oldValue   Json?            @map("old_value")
+  newValue   Json?            @map("new_value")
+  ipAddress  String?          @map("ip_address")
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([campaignId])
+  @@map("referral_campaign_audit_logs")
+}
+
+model ReferralProfile {
+  id                 String                @id @default(cuid())
+  userId             String                @unique @db.Uuid @map("user_id")
+  user               User                  @relation(fields: [userId], references: [id])
+  referralCode       String                @unique @map("referral_code")
+  status             ReferralProfileStatus @default(ACTIVE)
+  termsAccepted      Boolean               @map("terms_accepted")
+  termsAcceptedAt    DateTime              @map("terms_accepted_at")
+  privacyAccepted    Boolean               @map("privacy_accepted")
+  privacyAcceptedAt  DateTime              @map("privacy_accepted_at")
+  termsVersion       String                @map("terms_version")
+  privacyVersion     String                @default("PRIVACY-2026-01") @map("privacy_version")
+  joinedAt           DateTime              @map("joined_at")
+  campaignEligible   Boolean               @default(true) @map("campaign_eligible")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("referral_profiles")
+}
+
+model Certificate {
+  id                String        @id @default(cuid())
+  certificateNumber String        @unique @map("certificate_number")
+  learnerId         String        @db.Uuid @map("learner_id")
+  learner           User          @relation(fields: [learnerId], references: [id])
+  learningPathId    String?       @map("learning_path_id")
+  learningPath      LearningPath? @relation(fields: [learningPathId], references: [id])
+  courseName        String        @map("course_name")
+  learnerName       String        @map("learner_name")
+  issueDate         DateTime      @map("issue_date")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@unique([learnerId, learningPathId])
+  @@index([learnerId])
+  @@index([learningPathId])
+  @@map("certificates")
+}
+
+model LearningPath {
+  id                     String                 @id @default(cuid())
+  title                  String
+  slug                   String                 @unique
+  description            String
+  thumbnailUrl           String?                @map("thumbnail_url")
+  estimatedDuration      Int?                   @map("estimated_duration")
+  difficulty             LearningPathDifficulty @default(BEGINNER)
+  category               String
+  status                 LearningPathStatus     @default(DRAFT)
+  visibility             LearningPathVisibility @default(PUBLIC)
+  isFeatured             Boolean                @default(false) @map("is_featured")
+  requiredQuizFeedItemId String?                @map("required_quiz_feed_item_id")
+  requiredQuiz           FeedItem?              @relation("RequiredQuizPath", fields: [requiredQuizFeedItemId], references: [id])
+  quizPassPercentage     Int                    @default(60) @map("quiz_pass_percentage")
+  certificateTemplate    String?                @map("certificate_template")
+  items                  LearningPathItem[]
+  progress               UserLearningProgress[]
+  itemCompletions        UserPathItemCompletion[]
+  quizAttempts           QuizAttempt[]
+  certificates           Certificate[]
+  referralCampaignCourses ReferralCampaignCourse[]
+  commissionTransactions ReferralCommissionTransaction[]
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+
+  @@index([status, visibility])
+  @@map("learning_paths")
+}
+
+model LearningPathItem {
+  id             String       @id @default(cuid())
+  learningPathId String       @map("learning_path_id")
+  learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  feedItemId     String       @map("feed_item_id")
+  feedItem       FeedItem     @relation(fields: [feedItemId], references: [id])
+  sortOrder      Int          @map("sort_order")
+  isRequired     Boolean      @default(true) @map("is_required")
+  passPercentage Int?         @map("pass_percentage")
+
+  @@unique([learningPathId, feedItemId])
+  @@index([learningPathId, sortOrder])
+  @@map("learning_path_items")
+}
+
+model UserLearningProgress {
+  id              String             @id @default(cuid())
+  userId          String             @db.Uuid @map("user_id")
+  user            User               @relation(fields: [userId], references: [id])
+  learningPathId  String             @map("learning_path_id")
+  learningPath    LearningPath       @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  status          UserLearningStatus @default(NOT_STARTED)
+  progressPercent Int                @default(0) @map("progress_percent")
+  startedAt       DateTime?          @map("started_at")
+  completedAt     DateTime?          @map("completed_at")
+  lastActivityAt  DateTime?          @map("last_activity_at")
+
+  @@unique([userId, learningPathId])
+  @@index([userId, status])
+  @@map("user_learning_progress")
+}
+
+model UserPathItemCompletion {
+  id             String       @id @default(cuid())
+  userId         String       @db.Uuid @map("user_id")
+  user           User         @relation(fields: [userId], references: [id])
+  learningPathId String       @map("learning_path_id")
+  learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  feedItemId     String       @map("feed_item_id")
+  feedItem       FeedItem     @relation(fields: [feedItemId], references: [id])
+  completedAt    DateTime     @default(now()) @map("completed_at")
+
+  @@unique([userId, learningPathId, feedItemId])
+  @@index([learningPathId])
+  @@map("user_path_item_completions")
+}
+
+model QuizAttempt {
+  id             String        @id @default(cuid())
+  userId         String        @db.Uuid @map("user_id")
+  user           User          @relation(fields: [userId], references: [id])
+  feedItemId     String        @map("feed_item_id")
+  feedItem       FeedItem      @relation(fields: [feedItemId], references: [id])
+  learningPathId String?       @map("learning_path_id")
+  learningPath   LearningPath? @relation(fields: [learningPathId], references: [id])
+  score          Int
+  totalQuestions Int           @map("total_questions")
+  percentage     Int
+  passed         Boolean
+  startedAt      DateTime      @default(now()) @map("started_at")
+  completedAt    DateTime      @default(now()) @map("completed_at")
+
+  @@index([userId, feedItemId, learningPathId])
+  @@map("quiz_attempts")
+}
+
+model Advertisement {
+  id          String              @id @default(cuid())
+  name        String
+  feedItemId  String              @unique @map("feed_item_id")
+  feedItem    FeedItem            @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  advertiser  String?
+  startsAt    DateTime            @map("starts_at")
+  endsAt      DateTime            @map("ends_at")
+  status      AdvertisementStatus @default(DRAFT)
+  impressions Int                 @default(0)
+  clicks      Int                 @default(0)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, startsAt, endsAt])
+  @@map("advertisements")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  isPublic  Boolean  @default(false) @map("is_public")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
