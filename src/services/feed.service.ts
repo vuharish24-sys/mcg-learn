@@ -130,24 +130,36 @@ export const feedService = {
     });
   },
 
-  /** Backfill OG/oEmbed previews for items that have never been fetched. */
+  /**
+   * Backfill OG/oEmbed previews for items that have never been fetched, and
+   * re-fetch Instagram ones periodically — Instagram's CDN image URLs are
+   * signed with a built-in expiry (anti-hotlinking), so a cached preview
+   * eventually 403s no matter how it was originally fetched. YouTube/generic
+   * OG images don't expire this way, so they're only backfilled once.
+   */
   async ensureMissingPreviews(limit = 25) {
-    const pending = await prisma.feedItem.findMany({
+    const staleThreshold = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const candidates = await prisma.feedItem.findMany({
       where: {
         externalUrl: { not: null },
-        previewFetchedAt: null,
+        OR: [
+          { previewFetchedAt: null },
+          {
+            previewFetchedAt: { lt: staleThreshold },
+            OR: [
+              { externalUrl: { contains: "instagram.com" } },
+              { externalUrl: { contains: "instagr.am" } },
+            ],
+          },
+        ],
       },
       select: { id: true },
       orderBy: { updatedAt: "desc" },
       take: limit,
     });
 
-    let refreshed = 0;
-    for (const item of pending) {
-      await this.refreshPreview(item.id);
-      refreshed += 1;
-    }
-    return refreshed;
+    const results = await Promise.all(candidates.map((item) => this.refreshPreview(item.id)));
+    return results.filter(Boolean).length;
   },
 
   async findById(id: string) {
