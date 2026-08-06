@@ -17,13 +17,20 @@ export function FeedActionButton({
   const kind = getFeedActionKind(type);
   const opensExternal = kind === "external" && Boolean(externalUrl);
 
+  // Next.js <Link> prefetches the RSC payload by fetching the href, which follows
+  // this route's redirect cross-origin and gets blocked by CORS — the redirect target
+  // never sends Access-Control-Allow-Origin (it's not meant to be fetched). A plain <a>
+  // skips that entirely and just navigates, which is all this needs anyway.
+  if (opensExternal) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={buttonVariants({ size: "sm" })}>
+        {getFeedActionLabel(type)} <ExternalLink className="size-3" />
+      </a>
+    );
+  }
+
   return (
-    <Link
-      href={href}
-      target={opensExternal ? "_blank" : undefined}
-      rel={opensExternal ? "noopener noreferrer" : undefined}
-      className={buttonVariants({ size: "sm" })}
-    >
+    <Link href={href} className={buttonVariants({ size: "sm" })}>
       {getFeedActionLabel(type)} <ExternalLink className="size-3" />
     </Link>
   );

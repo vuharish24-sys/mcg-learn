@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +18,14 @@ export function MediaCover({
   children?: ReactNode;
   fit?: "cover" | "contain";
 }) {
+  const [failed, setFailed] = useState(false);
+  // Reset if the src changes (e.g. list re-renders with a different item at this slot).
+  const [lastSrc, setLastSrc] = useState(src);
+  if (src !== lastSrc) {
+    setLastSrc(src);
+    setFailed(false);
+  }
+
   return (
     <div
       className={cn(
@@ -22,13 +33,14 @@ export function MediaCover({
         className,
       )}
     >
-      {src ? (
+      {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element -- external OG/CDN URLs; referrerPolicy required for Instagram
         <img
           src={src}
           alt={alt}
           referrerPolicy="no-referrer"
           decoding="async"
+          onError={() => setFailed(true)}
           className={cn(
             "pointer-events-none absolute inset-0 h-full w-full max-w-none",
             fit === "contain" ? "object-contain object-center" : "object-cover object-center",
