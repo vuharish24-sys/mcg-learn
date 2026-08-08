@@ -67,6 +67,9 @@ export const quizAttemptService = {
       },
     });
 
+    let certificateJustIssued = false;
+    let certificateNumber: string | null = null;
+
     if (passed && input.learningPathId) {
       await prisma.userPathItemCompletion.upsert({
         where: {
@@ -84,7 +87,23 @@ export const quizAttemptService = {
         update: {},
       });
 
+      const certBefore = await prisma.certificate.findUnique({
+        where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId: input.learningPathId } },
+        select: { id: true },
+      });
+
       await learningPathService.recalculateProgress(input.userId, input.learningPathId);
+
+      if (!certBefore) {
+        const certAfter = await prisma.certificate.findUnique({
+          where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId: input.learningPathId } },
+          select: { certificateNumber: true },
+        });
+        if (certAfter) {
+          certificateJustIssued = true;
+          certificateNumber = certAfter.certificateNumber;
+        }
+      }
     }
 
     const bestAttempt = await prisma.quizAttempt.findFirst({
@@ -103,6 +122,8 @@ export const quizAttemptService = {
       bestScore: bestAttempt?.percentage ?? percentage,
       // Safe to reveal now that the attempt is graded and recorded.
       answerKey,
+      certificateJustIssued,
+      certificateNumber,
     };
   },
 

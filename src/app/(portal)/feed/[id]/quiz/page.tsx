@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { parseFeedContent } from "@/lib/feed-actions";
 import { resolveQuizPassPercentage } from "@/lib/quiz-pass";
 import { prisma } from "@/lib/prisma";
+import { getProfileCompleteness } from "@/services/profile.service";
 import { QuizPlayer } from "@/components/feed/quiz-player";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -15,7 +16,8 @@ export default async function FeedQuizPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ learningPathId?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
+  const advisingReady = getProfileCompleteness(user).isReadyForAdvising;
   const { id } = await params;
   const { learningPathId } = await searchParams;
   const item = await prisma.feedItem.findFirst({
@@ -67,6 +69,7 @@ export default async function FeedQuizPage({
               hasGradedQuestions={hasGradedQuestions}
               feedItemId={item.id}
               learningPathId={learningPathId}
+              advisingReady={advisingReady}
             />
           ) : item.externalUrl ? (
             <a href={item.externalUrl} target="_blank" rel="noopener noreferrer" className={buttonVariants()}>
