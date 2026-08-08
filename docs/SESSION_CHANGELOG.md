@@ -1,9 +1,9 @@
 # MCG Learn — Session Changelog
 
-**Date:** 2026-08-07
-**Period:** 2026-08-01 → 2026-08-07
-**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment
-**Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them)
+**Date:** 2026-08-08 (updated — see §8–10 for this update)
+**Period:** 2026-08-01 → 2026-08-08
+**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding
+**Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI
 
 ---
 
@@ -82,18 +82,70 @@ Verified against the real DB: correct answers → passed with correct score; wro
 
 ---
 
-## 6. Verification status
+## 6. Verification status (as of §5)
 
 **Confirmed working**: everything above passes typecheck/lint/build, and every fix touching data was additionally verified with one-off scripts against the real database (create test data → assert behavior → clean up). Public/unauthenticated pages and API auth behavior were verified directly on the live Netlify deployment.
 
-**Not yet confirmed**: the authenticated click-through experience (feed, quiz-taking UX, dashboard, CRM, admin, referral claim end-to-end) has not been exercised live by a human or by Claude — Claude cannot enter passwords or create accounts, even for testing its own work. This is the next thing to do: log in on the deployed site and walk the core flows.
+**Not yet confirmed at this point**: the authenticated click-through experience hadn't been exercised live yet. This gap was closed in §7.
 
 ---
 
-## 7. Known gaps (not addressed this session)
+## 7. Live authenticated walkthrough
+
+The user logged into the deployed site directly (Claude does not enter passwords or create accounts, even for testing its own work — the user drove the sign-in, Claude drove everything after). With that session, confirmed live:
+
+- Dashboard renders correctly: gradient name text, active nav highlighting, gradient logo, "Commission earned" hero card, color-cycling stat badges
+- Dark mode toggle flips the whole app cleanly
+- Instagram thumbnail loads correctly (previously 403'd)
+- External feed links are genuine `<a target="_blank">` elements now (confirmed via DOM inspection), not `next/link` — the CORS-prefetch issue structurally can't recur
+- **Quiz grading end-to-end**: confirmed the answer key is absent from the page payload, then actually took a quiz — selected correct answers, submitted, got back a server-computed "Score: 2/2 (100%) · Passed," zero console errors
+- Achievements page correctly shows no certificate for a quiz not tied to a learning path (verifies the completion logic isn't over-eager)
+- RBAC: a Learner's nav correctly hides CRM/Trainers/Advertisements/Admin
+
+One tooling note: the browser-automation tool's `ref`-based clicking had a coordinate-space mismatch in this environment (clicks landed on the wrong element); switched to raw screenshot-coordinate clicking, which was reliable. Environment quirk, not an app issue.
+
+---
+
+## 8. Quiz-pass and certificate moments made to feel like an event
+
+Prompted by: the quiz result was one plain line of text ("Score: 2/2 (100%) · Passed") — the platform's core engagement moment looked identical to a form-validation message, and the certificate-issuance moment (the platform's actual conversion point, per its own funnel: feed → learning → CRM → paid LMS) fired completely silently.
+
+- [quiz-player.tsx](../src/components/feed/quiz-player.tsx): result now renders as a gradient celebratory card (bigger treatment for a perfect score, trophy icon), with a "Try again" CTA on a miss
+- [quiz-attempt.service.ts](../src/services/quiz-attempt.service.ts): `recordAttempt` now detects when an attempt causes a *new* certificate to be issued (comparing certificate existence before/after `recalculateProgress`, not just re-checking "passed" — so a retake doesn't re-fire it) and returns the certificate number
+- New shared [`CertificateEarnedBanner`](../src/components/learning-path/certificate-earned-banner.tsx): "You just earned a certificate!" with a "View certificate" link and, if the learner's advising profile isn't complete, a "Complete your profile" nudge — reusing the *existing* `isReadyForAdvising` mechanism that already gates the CRM/advisor handoff, rather than a CTA to nowhere
+
+**Gap found and closed same day**: the above only fired from the quiz flow. The one real learning path in production ("Introduction to Medical Coding") has no quiz at all — it's an Instagram Reel + an Article, completed via "Mark as Completed" on the engage/webinar/career/pdf pages, which previously issued certificates with zero fanfare. Extended the identical before/after certificate check to `learningPathService.markItemComplete()` and wired the shared banner through `PathItemCompleteButton` and all four pages that render it, each now computing `advisingReady` the same way the dashboard already does.
+
+Verified against the real database (pass → cert issued once, retake → not re-fired; mark-complete → cert issued once, re-mark → not re-fired) and **live on the deployed site**: created a throwaway quiz-in-a-path, answered it in the actual logged-in session, watched the celebration card and certificate banner render; then created a throwaway article-only path (matching the real content's shape) and confirmed the same banner fires from "Mark as Completed" too. All test data deleted after each check.
+
+---
+
+## 9. Social media content: in-app view embedding
+
+Prompted by: "get more views ... from the app itself without moving out." Two platform-reality constraints were surfaced and agreed on before building:
+- **Comments**: not achievable for Instagram at all — no third-party API lets an arbitrary user comment on an arbitrary post through an embed; Instagram's own embed widget routes any comment action back to Instagram by design.
+- **Likes/comments on YouTube**: technically possible via YouTube's Data API, but only after a learner completes real Google/YouTube OAuth — a new auth integration this app doesn't have (it's Supabase-only today). Scoped as a separate future initiative, not built here.
+
+**What shipped — views, which needed no new auth:**
+- New `"watch"` feed-action kind (`YOUTUBE`, `INSTAGRAM_REEL`) with its own in-app page at `/feed/[id]/watch` — [feed-actions.ts](../src/lib/feed-actions.ts)
+- YouTube renders via the standard `youtube-nocookie.com` iframe embed — [youtube-embed.tsx](../src/components/feed/youtube-embed.tsx)
+- Instagram renders via Instagram's own official embed widget (`instagram.com/embed.js`, the same one from a post's "Embed" button — no API key) — [instagram-embed.tsx](../src/components/feed/instagram-embed.tsx)
+- Both count as real views/plays on the platform side since they're the platforms' own supported embeds, not scraping
+- A "View on Instagram/YouTube" link stays available as a fallback; within a learning path, "Mark as Completed" still works
+- Routing updated at both entry points (main feed and learning-path curriculum) so this applies everywhere these items appear
+
+Verified live: the real Instagram post ("The Unknown Profession") renders its full native embed in-app (like/comment/share icons, follower count, real engagement UI) with zero console errors; a throwaway YouTube item rendered and **actually played** on click. Test items deleted after.
+
+**Incidental finding while verifying**: an orphaned test feed item (`__test_cert_flag_quiz__`) from an earlier cleanup script in this same session had survived and was briefly visible in the live feed. Root cause not fully confirmed (the cleanup script's own log claimed success); found via a live audit query and deleted directly. No other leftover test data found on re-audit.
+
+---
+
+## 10. Known gaps (current)
 
 - No automated test suite (pre-existing gap, flagged in `RC_AUDIT_REPORT.md`, still true)
 - CRM, trainers, and admin management screens weren't touched in the design pass (only dashboard/nav/auth/achievements)
 - No error monitoring (Sentry or equivalent)
 - No rate limiting on public endpoints (registration, referral-code validation)
 - Email deliverability at real volume depends on Supabase Auth's configured email provider — not verifiable from code
+- YouTube/Instagram likes and comments are not implemented — Instagram is a hard platform wall; YouTube would need a new Google OAuth integration (separate future scope)
+- Cleanup scripts for one-off DB verification should be double-checked with a follow-up query, not just trusted from their own console output (see §9 incidental finding)
