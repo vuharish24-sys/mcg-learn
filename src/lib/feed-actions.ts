@@ -5,6 +5,7 @@ export type FeedActionKind =
   | "pdf"
   | "webinar"
   | "career"
+  | "watch"
   | "external"
   | "internal";
 
@@ -18,12 +19,13 @@ export function getFeedActionKind(type: FeedType): FeedActionKind {
       return "webinar";
     case "CAREER_TIP":
       return "career";
+    case "YOUTUBE":
+    case "INSTAGRAM_REEL":
+      return "watch";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
     case "ARTICLE":
-    case "YOUTUBE":
-    case "INSTAGRAM_REEL":
     case "ANNOUNCEMENT":
       return "external";
     default:
@@ -41,6 +43,9 @@ export function getFeedActionLabel(type: FeedType): string {
       return "Register webinar";
     case "CAREER_TIP":
       return "Book career guidance";
+    case "YOUTUBE":
+    case "INSTAGRAM_REEL":
+      return "Watch";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -56,6 +61,7 @@ export function getFeedActionHref(id: string, type: FeedType): string {
   if (kind === "pdf") return `/feed/${id}/pdf`;
   if (kind === "webinar") return `/feed/${id}/webinar`;
   if (kind === "career") return `/feed/${id}/career`;
+  if (kind === "watch") return `/feed/${id}/watch`;
   return `/api/v1/feed/${id}/open`;
 }
 
@@ -67,7 +73,29 @@ export function getPathFeedItemHref(id: string, type: FeedType, learningPathId: 
   if (kind === "pdf") return `/feed/${id}/pdf?${qs}`;
   if (kind === "webinar") return `/feed/${id}/webinar?${qs}`;
   if (kind === "career") return `/feed/${id}/career?${qs}`;
+  if (kind === "watch") return `/feed/${id}/watch?${qs}`;
   return `/feed/${id}/engage?${qs}`;
+}
+
+/** Extracts an embeddable YouTube video ID from watch/shorts/youtu.be/embed URL formats. */
+export function extractYouTubeVideoId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\.|^m\.|^music\./, "");
+    if (host === "youtu.be") {
+      return parsed.pathname.slice(1).split("/")[0] || null;
+    }
+    if (host === "youtube.com") {
+      if (parsed.pathname === "/watch") return parsed.searchParams.get("v");
+      const shortsMatch = parsed.pathname.match(/^\/shorts\/([^/]+)/);
+      if (shortsMatch) return shortsMatch[1];
+      const embedMatch = parsed.pathname.match(/^\/embed\/([^/]+)/);
+      if (embedMatch) return embedMatch[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export type QuizQuestion = {

@@ -22,7 +22,7 @@ export async function GET(
   const learningPathId = new URL(request.url).searchParams.get("learningPathId");
   const kind = getFeedActionKind(item.type);
   const redirectsInternally =
-    kind === "quiz" || kind === "pdf" || kind === "webinar" || kind === "career";
+    kind === "quiz" || kind === "pdf" || kind === "webinar" || kind === "career" || kind === "watch";
 
   await prisma.$transaction(async (tx) => {
     if (!redirectsInternally && !(learningPathId && item.externalUrl)) {
@@ -63,6 +63,9 @@ export async function GET(
   }
   if (kind === "career") {
     return NextResponse.redirect(withPathQuery(`/feed/${id}/career`));
+  }
+  if (kind === "watch") {
+    return NextResponse.redirect(withPathQuery(`/feed/${id}/watch`));
   }
 
   // From a Learning Path, keep the learner in-app so they can mark completion.
