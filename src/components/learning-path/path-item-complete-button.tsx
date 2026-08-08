@@ -2,20 +2,25 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CertificateEarnedBanner } from "@/components/learning-path/certificate-earned-banner";
 
 export function PathItemCompleteButton({
   learningPathId,
   feedItemId,
   label = "Mark as Completed",
+  advisingReady = true,
 }: {
   learningPathId: string;
   feedItemId: string;
   label?: string;
+  advisingReady?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [certificateJustIssued, setCertificateJustIssued] = useState(false);
   const [error, setError] = useState("");
 
   async function complete() {
@@ -33,11 +38,19 @@ export function PathItemCompleteButton({
       return;
     }
     setDone(true);
+    setCertificateJustIssued(Boolean(payload.data?.certificateJustIssued));
     router.refresh();
   }
 
   if (done) {
-    return <p className="text-sm font-medium text-teal-700">Lesson marked complete.</p>;
+    return (
+      <div className="space-y-3">
+        <p className="flex items-center gap-2 text-sm font-medium text-teal-700">
+          <CheckCircle2 className="size-4" /> Lesson marked complete.
+        </p>
+        {certificateJustIssued && <CertificateEarnedBanner advisingReady={advisingReady} />}
+      </div>
+    );
   }
 
   return (

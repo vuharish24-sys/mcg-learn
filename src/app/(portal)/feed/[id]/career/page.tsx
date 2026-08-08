@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProfileCompleteness } from "@/services/profile.service";
 import { FeedLeadForm } from "@/components/feed/feed-lead-form";
 import { PathItemCompleteButton } from "@/components/learning-path/path-item-complete-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ export default async function FeedCareerPage({
   searchParams: Promise<{ learningPathId?: string }>;
 }) {
   const user = await requireUser();
+  const advisingReady = getProfileCompleteness(user).isReadyForAdvising;
   const { id } = await params;
   const { learningPathId } = await searchParams;
   const item = await prisma.feedItem.findFirst({
@@ -57,6 +59,7 @@ export default async function FeedCareerPage({
               learningPathId={learningPathId}
               feedItemId={item.id}
               label="Mark as Completed"
+              advisingReady={advisingReady}
             />
           )}
         </CardContent>

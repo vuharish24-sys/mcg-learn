@@ -182,7 +182,27 @@ export const learningPathService = {
       update: {},
     });
 
-    return this.recalculateProgress(userId, learningPathId);
+    const certBefore = await prisma.certificate.findUnique({
+      where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
+      select: { id: true },
+    });
+
+    const progress = await this.recalculateProgress(userId, learningPathId);
+
+    let certificateJustIssued = false;
+    let certificateNumber: string | null = null;
+    if (!certBefore) {
+      const certAfter = await prisma.certificate.findUnique({
+        where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
+        select: { certificateNumber: true },
+      });
+      if (certAfter) {
+        certificateJustIssued = true;
+        certificateNumber = certAfter.certificateNumber;
+      }
+    }
+
+    return { progress, certificateJustIssued, certificateNumber };
   },
 
   async isItemComplete(

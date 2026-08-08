@@ -17,8 +17,8 @@ export async function POST(
     const body = (await request.json()) as { feedItemId?: string };
     if (!body.feedItemId) return apiError("feedItemId is required", 400);
 
-    const progress = await learningPathService.markItemComplete(user.id, path.id, body.feedItemId);
-    return apiSuccess(progress);
+    const result = await learningPathService.markItemComplete(user.id, path.id, body.feedItemId);
+    return apiSuccess(result);
   } catch (error) {
     return handleApiError(error);
   }
