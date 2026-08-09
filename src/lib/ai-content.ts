@@ -1,5 +1,6 @@
-import type { FeedType } from "@prisma/client";
+import type { AiProviderType, FeedType } from "@prisma/client";
 import { AppValidationError } from "@/lib/api";
+import { aiProviderService } from "@/services/ai-provider.service";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -74,11 +75,7 @@ function parseGeneratedText(rawText: string, providerName: string): GeneratedTex
   };
 }
 
-/** Returns null if not configured (skip to next provider); throws if configured but the call failed. */
-async function tryGemini(prompt: string): Promise<GeneratedText | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
+async function callGemini(apiKey: string, prompt: string): Promise<GeneratedText> {
   let response: Response;
   try {
     response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
@@ -111,11 +108,7 @@ async function tryGemini(prompt: string): Promise<GeneratedText | null> {
   return parseGeneratedText(text, "Gemini");
 }
 
-/** Returns null if not configured (skip to next provider); throws if configured but the call failed. */
-async function tryGroq(prompt: string): Promise<GeneratedText | null> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return null;
-
+async function callGroq(apiKey: string, prompt: string): Promise<GeneratedText> {
   let response: Response;
   try {
     response = await fetch(GROQ_URL, {
@@ -149,29 +142,64 @@ async function tryGroq(prompt: string): Promise<GeneratedText | null> {
   return parseGeneratedText(text, "Groq");
 }
 
+async function callProvider(providerType: AiProviderType, apiKey: string, prompt: string): Promise<GeneratedText> {
+  if (providerType === "GEMINI") return callGemini(apiKey, prompt);
+  return callGroq(apiKey, prompt);
+}
+
 /**
  * Generates a title, description, and a follow-up image prompt for a feed item
- * from an admin-given topic. Tries Gemini first, falls back to Groq if Gemini
- * isn't configured or its call fails - two independent free-tier providers so
- * one outage or missing key doesn't block content generation entirely.
+ * from an admin-given topic.
+ *
+ * Provider source, in order of precedence:
+ * 1. Admin-configured providers (Admin > AI Providers), tried in priority order.
+ *    If that table has any rows at all, it's authoritative — even if every row
+ *    is currently disabled, that's a deliberate admin choice, not a signal to
+ *    fall back.
+ * 2. GEMINI_API_KEY / GROQ_API_KEY env vars, only when the table has zero rows
+ *    (i.e. the in-app configuration has never been set up) — keeps the
+ *    env-var setup from before this feature existed working without changes.
  */
 export async function generateFeedContent(topic: string, type: FeedType): Promise<GeneratedText> {
   const prompt = buildPrompt(topic, type);
-  const providers: [string, (p: string) => Promise<GeneratedText | null>][] = [
-    ["Gemini", tryGemini],
-    ["Groq", tryGroq],
+  const failures: string[] = [];
+
+  const dbConfigured = await aiProviderService.hasAnyConfigured();
+  if (dbConfigured) {
+    const configs = await aiProviderService.listEnabledWithKeys();
+    for (const config of configs) {
+      try {
+        const result = await callProvider(config.providerType, config.apiKey, prompt);
+        await aiProviderService.recordSuccess(config.id);
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`${config.label}: ${message}`);
+        console.error(`AI text generation via ${config.label} failed, trying next provider`, error);
+        await aiProviderService.recordFailure(config.id, message);
+      }
+    }
+    if (configs.length === 0) {
+      throw new AppValidationError(
+        "No AI providers are enabled. Enable one in Admin > AI Providers, or add a new one.",
+      );
+    }
+    throw new AppValidationError(`All enabled AI providers failed. ${failures.join(" ")}`);
+  }
+
+  // No in-app config exists yet — fall back to env vars.
+  const envProviders: [string, string | undefined, (key: string, p: string) => Promise<GeneratedText>][] = [
+    ["Gemini", process.env.GEMINI_API_KEY, callGemini],
+    ["Groq", process.env.GROQ_API_KEY, callGroq],
   ];
 
   let anyConfigured = false;
-  const failures: string[] = [];
-
-  for (const [name, run] of providers) {
+  for (const [name, apiKey, call] of envProviders) {
+    if (!apiKey) continue;
+    anyConfigured = true;
     try {
-      const result = await run(prompt);
-      if (result === null) continue; // not configured, try the next one
-      return result;
+      return await call(apiKey, prompt);
     } catch (error) {
-      anyConfigured = true;
       const message = error instanceof Error ? error.message : String(error);
       failures.push(`${name}: ${message}`);
       console.error(`AI text generation via ${name} failed, trying next provider`, error);
@@ -180,7 +208,7 @@ export async function generateFeedContent(topic: string, type: FeedType): Promis
 
   if (!anyConfigured) {
     throw new AppValidationError(
-      "AI content generation is not configured. Set GEMINI_API_KEY or GROQ_API_KEY.",
+      "AI content generation is not configured. Add a provider in Admin > AI Providers, or set GEMINI_API_KEY / GROQ_API_KEY.",
     );
   }
   throw new AppValidationError(`All configured AI providers failed. ${failures.join(" ")}`);

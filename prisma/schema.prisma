@@ -847,3 +847,31 @@ model Setting {
 
   @@map("settings")
 }
+
+enum AiProviderType {
+  GEMINI
+  GROQ
+}
+
+/**
+ * Admin-managed AI text-generation providers for "Generate with AI" (Admin > Feed).
+ * apiKey is stored encrypted at rest (AES-256-GCM, see src/lib/encryption.ts) —
+ * SETTINGS_ENCRYPTION_KEY (env var only, never in this table) is what unlocks it.
+ * If this table has no rows, generateFeedContent() falls back to the
+ * GEMINI_API_KEY/GROQ_API_KEY env vars for backward compatibility.
+ */
+model AiProviderConfig {
+  id              String         @id @default(cuid())
+  providerType    AiProviderType @map("provider_type")
+  label           String
+  encryptedApiKey String         @map("encrypted_api_key")
+  enabled         Boolean        @default(true)
+  priority        Int            @default(0)
+  lastUsedAt      DateTime?      @map("last_used_at")
+  lastError       String?        @map("last_error")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([enabled, priority])
+  @@map("ai_provider_configs")
+}

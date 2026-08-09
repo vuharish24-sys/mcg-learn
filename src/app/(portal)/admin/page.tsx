@@ -30,6 +30,7 @@ export default async function AdminPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Learning feed</CardTitle><a href="/admin/feed" className="text-sm font-semibold text-teal-700 hover:underline">Manage feed items →</a></CardHeader><CardContent><p className="text-sm text-slate-500">Create, edit, publish, and delete Learning Feed posts, including link previews.</p></CardContent></Card>
         <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Learning paths</CardTitle><a href="/admin/learning-paths" className="text-sm font-semibold text-teal-700 hover:underline">Manage learning paths →</a></CardHeader><CardContent><p className="text-sm text-slate-500">Create structured learning journeys with feed items, required quizzes, and automatic certificates.</p></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>AI Providers</CardTitle><a href="/admin/ai-providers" className="text-sm font-semibold text-teal-700 hover:underline">Manage AI providers →</a></CardHeader><CardContent><p className="text-sm text-slate-500">Configure and prioritize the API keys that power &ldquo;Generate with AI&rdquo; on the Feed page.</p></CardContent></Card>
       </div>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

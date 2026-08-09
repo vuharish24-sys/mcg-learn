@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,14 @@ export function GenerateFeedItemForm({ categories }: { categories: { id: string;
             <X />
           </Button>
         </div>
+
+        <p className="mb-4 text-xs text-slate-500">
+          Uses whichever AI provider is enabled in{" "}
+          <Link href="/admin/ai-providers" className="font-semibold text-teal-700 underline">
+            Admin &gt; AI Providers
+          </Link>
+          .
+        </p>
 
         {result ? (
           <div className="space-y-4">

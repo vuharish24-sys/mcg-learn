@@ -31,6 +31,21 @@ export const feedGenerateSchema = z.object({
   scheduledPublishAt: z.coerce.date().nullable().optional(),
 });
 
+export const aiProviderCreateSchema = z.object({
+  providerType: z.enum(["GEMINI", "GROQ"]),
+  label: z.string().trim().min(1).max(80),
+  apiKey: z.string().trim().min(10).max(500),
+  enabled: z.coerce.boolean().default(true),
+  priority: z.coerce.number().int().min(0).max(1000).default(0),
+});
+
+export const aiProviderUpdateSchema = z.object({
+  label: z.string().trim().min(1).max(80).optional(),
+  apiKey: z.string().trim().max(500).optional(),
+  enabled: z.coerce.boolean().optional(),
+  priority: z.coerce.number().int().min(0).max(1000).optional(),
+});
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.union([z.email(), z.literal(""), z.null()]).optional(),
