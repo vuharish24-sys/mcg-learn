@@ -4,6 +4,9 @@ import { AppValidationError } from "@/lib/api";
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+
 const TYPE_GUIDANCE: Partial<Record<FeedType, string>> = {
   ARTICLE: "Write it like an informative blog post excerpt.",
   CAREER_TIP: "Write practical, encouraging career advice a medical coding student could act on today.",
@@ -17,15 +20,19 @@ type GeneratedText = {
   imagePrompt: string;
 };
 
-/** Generates a title, description, and a follow-up image prompt for a feed item from an admin-given topic. */
-export async function generateFeedContent(topic: string, type: FeedType): Promise<GeneratedText> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new AppValidationError("AI content generation is not configured (missing GEMINI_API_KEY).");
-  }
+const RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    description: { type: "string" },
+    imagePrompt: { type: "string" },
+  },
+  required: ["title", "description", "imagePrompt"],
+};
 
+function buildPrompt(topic: string, type: FeedType) {
   const guidance = TYPE_GUIDANCE[type] ?? "Write it in a clear, engaging style suitable for a learning feed card.";
-  const prompt = [
+  return [
     "You are writing content for MCG Learn, a medical coding education platform whose feed mixes",
     "articles, career tips, and announcements for aspiring and working medical coders.",
     "",
@@ -39,8 +46,38 @@ export async function generateFeedContent(topic: string, type: FeedType): Promis
     "- imagePrompt: one sentence describing a professional, brand-appropriate cover image for this",
     "  (teal and white color scheme, no embedded text or words in the image, no logos)",
     "",
-    "Return only JSON matching the schema.",
+    'Return only JSON: {"title": string, "description": string, "imagePrompt": string}',
   ].join("\n");
+}
+
+function parseGeneratedText(rawText: string, providerName: string): GeneratedText {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error(`${providerName} returned invalid JSON`);
+  }
+
+  const result = parsed as Record<string, unknown>;
+  if (
+    typeof result.title !== "string" ||
+    typeof result.description !== "string" ||
+    typeof result.imagePrompt !== "string"
+  ) {
+    throw new Error(`${providerName} returned an unexpected response shape`);
+  }
+
+  return {
+    title: result.title.trim().slice(0, 180),
+    description: result.description.trim().slice(0, 3000),
+    imagePrompt: result.imagePrompt.trim(),
+  };
+}
+
+/** Returns null if not configured (skip to next provider); throws if configured but the call failed. */
+async function tryGemini(prompt: string): Promise<GeneratedText | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
 
   let response: Response;
   try {
@@ -51,59 +88,102 @@ export async function generateFeedContent(topic: string, type: FeedType): Promis
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              description: { type: "string" },
-              imagePrompt: { type: "string" },
-            },
-            required: ["title", "description", "imagePrompt"],
-          },
+          responseSchema: RESPONSE_SCHEMA,
         },
       }),
       signal: AbortSignal.timeout(30000),
     });
   } catch {
-    throw new AppValidationError("Could not reach the AI text generation service. Try again in a moment.");
+    throw new Error("could not reach Gemini");
   }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new AppValidationError(
-      `AI text generation failed (${response.status}): ${errorText.slice(0, 200) || "unknown error"}`,
-    );
+    throw new Error(`Gemini returned ${response.status}: ${errorText.slice(0, 150) || "unknown error"}`);
   }
 
   const data = (await response.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new AppValidationError("AI text generation returned an empty response.");
-  }
+  if (!text) throw new Error("Gemini returned an empty response");
 
-  let parsed: unknown;
+  return parseGeneratedText(text, "Gemini");
+}
+
+/** Returns null if not configured (skip to next provider); throws if configured but the call failed. */
+async function tryGroq(prompt: string): Promise<GeneratedText | null> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+
+  let response: Response;
   try {
-    parsed = JSON.parse(text);
+    response = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
   } catch {
-    throw new AppValidationError("AI text generation returned invalid JSON.");
+    throw new Error("could not reach Groq");
   }
 
-  const result = parsed as Record<string, unknown>;
-  if (
-    typeof result.title !== "string" ||
-    typeof result.description !== "string" ||
-    typeof result.imagePrompt !== "string"
-  ) {
-    throw new AppValidationError("AI text generation returned an unexpected response shape.");
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Groq returned ${response.status}: ${errorText.slice(0, 150) || "unknown error"}`);
   }
 
-  return {
-    title: result.title.trim().slice(0, 180),
-    description: result.description.trim().slice(0, 3000),
-    imagePrompt: result.imagePrompt.trim(),
+  const data = (await response.json()) as {
+    choices?: { message?: { content?: string } }[];
   };
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error("Groq returned an empty response");
+
+  return parseGeneratedText(text, "Groq");
+}
+
+/**
+ * Generates a title, description, and a follow-up image prompt for a feed item
+ * from an admin-given topic. Tries Gemini first, falls back to Groq if Gemini
+ * isn't configured or its call fails - two independent free-tier providers so
+ * one outage or missing key doesn't block content generation entirely.
+ */
+export async function generateFeedContent(topic: string, type: FeedType): Promise<GeneratedText> {
+  const prompt = buildPrompt(topic, type);
+  const providers: [string, (p: string) => Promise<GeneratedText | null>][] = [
+    ["Gemini", tryGemini],
+    ["Groq", tryGroq],
+  ];
+
+  let anyConfigured = false;
+  const failures: string[] = [];
+
+  for (const [name, run] of providers) {
+    try {
+      const result = await run(prompt);
+      if (result === null) continue; // not configured, try the next one
+      return result;
+    } catch (error) {
+      anyConfigured = true;
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${name}: ${message}`);
+      console.error(`AI text generation via ${name} failed, trying next provider`, error);
+    }
+  }
+
+  if (!anyConfigured) {
+    throw new AppValidationError(
+      "AI content generation is not configured. Set GEMINI_API_KEY or GROQ_API_KEY.",
+    );
+  }
+  throw new AppValidationError(`All configured AI providers failed. ${failures.join(" ")}`);
 }
 
 /**
