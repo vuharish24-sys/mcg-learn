@@ -20,6 +20,17 @@ export const feedItemSchema = z.object({
   placements: z.array(z.enum(["FEED", "LEARNING_PATH_LIST"])).min(1).default(["FEED"]),
 });
 
+export const feedGenerateSchema = z.object({
+  topic: z.string().trim().min(3).max(300),
+  type: z.enum([
+    "ARTICLE", "YOUTUBE", "INSTAGRAM_REEL", "PDF", "QUIZ", "CAREER_TIP",
+    "ANNOUNCEMENT", "WEBINAR", "ADVERTISEMENT", "SPONSORED", "INTERNAL_PROMOTION",
+  ]),
+  categoryId: z.string().min(1),
+  // When set, the item is created as DRAFT and a scheduled job publishes it at this time.
+  scheduledPublishAt: z.coerce.date().nullable().optional(),
+});
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.union([z.email(), z.literal(""), z.null()]).optional(),

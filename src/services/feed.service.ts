@@ -203,6 +203,18 @@ export const feedService = {
     });
   },
 
+  /** Publishes DRAFT items whose scheduled publishedAt has arrived (AI-generated or manually scheduled). */
+  async publishScheduled() {
+    const result = await prisma.feedItem.updateMany({
+      where: {
+        status: "DRAFT",
+        publishedAt: { not: null, lte: new Date() },
+      },
+      data: { status: "PUBLISHED" },
+    });
+    return { published: result.count };
+  },
+
   async delete(id: string) {
     const existing = await prisma.feedItem.findUnique({ where: { id } });
     if (!existing) return null;

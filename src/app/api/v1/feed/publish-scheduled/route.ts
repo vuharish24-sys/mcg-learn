@@ -1,14 +1,14 @@
 import { apiError, apiSuccess } from "@/lib/api";
 import { getApiUser } from "@/lib/auth";
 import { isValidCronSecret } from "@/lib/cron-auth";
-import { campaignManagementService } from "@/services/campaign-management.service";
+import { feedService } from "@/services/feed.service";
 
-/** Cron/manual job endpoint to auto-expire due referral milestones. Callable by an admin session or the CRON_SECRET bearer token (scheduled job). */
+/** Cron/manual job endpoint: publishes DRAFT feed items whose scheduled publishedAt has arrived. */
 export async function POST(request: Request) {
   if (!isValidCronSecret(request)) {
     const user = await getApiUser();
     if (!user) return apiError("Unauthorized", 401);
     if (user.role.key !== "ADMIN") return apiError("Forbidden", 403);
   }
-  return apiSuccess(await campaignManagementService.expireDueMilestones());
+  return apiSuccess(await feedService.publishScheduled());
 }

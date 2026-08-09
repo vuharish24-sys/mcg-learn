@@ -278,6 +278,8 @@ model FeedItem {
   isFeatured    Boolean        @default(false) @map("is_featured")
   viewCount     Int            @default(0) @map("view_count")
   placements    FeedPlacement[] @default([FEED])
+  /** The topic/prompt an admin gave the AI generator. Null for manually-authored items. */
+  generationTopic String? @map("generation_topic")
   advertisement        Advertisement?
   learningPathItems    LearningPathItem[]
   requiredForPaths     LearningPath[]             @relation("RequiredQuizPath")
