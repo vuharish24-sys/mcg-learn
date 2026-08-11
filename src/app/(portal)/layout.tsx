@@ -3,6 +3,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { requireUser } from "@/lib/auth";
 import { isReferralProfileEligible } from "@/lib/referral-program";
 import { referralProfileService } from "@/services/referral-profile.service";
+import { getBrandingLogoUrl } from "@/lib/branding";
 
 export default async function PortalLayout({
   children,
@@ -10,7 +11,10 @@ export default async function PortalLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  const profile = await referralProfileService.getByUserId(user.id);
+  const [profile, logoUrl] = await Promise.all([
+    referralProfileService.getByUserId(user.id),
+    getBrandingLogoUrl(),
+  ]);
   const referralProgramJoined = isReferralProfileEligible(profile);
 
   return (
@@ -19,6 +23,7 @@ export default async function PortalLayout({
         role={user.role.key}
         userName={user.fullName}
         referralProgramJoined={referralProgramJoined}
+        logoUrl={logoUrl}
       />
       <main className="pb-24 md:ml-64 md:pb-0">
         <header className="flex h-16 items-center justify-between border-b bg-white px-5 md:px-8 dark:border-slate-800 dark:bg-slate-950">

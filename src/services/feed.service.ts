@@ -52,21 +52,30 @@ async function previewFieldsForUrl(
 
 export const feedService = {
   list(query: FeedQuery = {}) {
-    const where: Prisma.FeedItemWhereInput = {
-      ...(query.includeDrafts ? {} : { status: "PUBLISHED" }),
+    const conditions: Prisma.FeedItemWhereInput[] = [
+      ...(query.includeDrafts ? [] : [{ status: "PUBLISHED" as const }]),
       ...(query.search
-        ? {
-            OR: [
-              { title: { contains: query.search, mode: "insensitive" } },
-              { description: { contains: query.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(query.category ? { category: { slug: query.category } } : {}),
-      ...(query.type ? { type: query.type as FeedType } : {}),
-      ...(query.featured ? { isFeatured: true } : {}),
-      ...(query.placement ? { placements: { has: query.placement } } : {}),
-    };
+        ? [
+            {
+              OR: [
+                { title: { contains: query.search, mode: "insensitive" as const } },
+                { description: { contains: query.search, mode: "insensitive" as const } },
+              ],
+            },
+          ]
+        : []),
+      ...(query.category ? [{ category: { slug: query.category } }] : []),
+      ...(query.type ? [{ type: query.type as FeedType }] : []),
+      ...(query.featured ? [{ isFeatured: true }] : []),
+      ...(query.placement ? [{ placements: { has: query.placement } }] : []),
+      // Job postings scoped to a specific partner only surface on that
+      // partner's board — the admin management view (includeDrafts) still
+      // needs to see everything to edit it.
+      ...(query.includeDrafts
+        ? []
+        : [{ OR: [{ type: { not: "JOB_POSTING" as const } }, { postedByPartnerId: null }] }]),
+    ];
+    const where: Prisma.FeedItemWhereInput = conditions.length ? { AND: conditions } : {};
 
     return prisma.feedItem.findMany({
       where,

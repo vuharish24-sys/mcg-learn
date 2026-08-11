@@ -1,6 +1,6 @@
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { getApiUser } from "@/lib/auth";
-import { generateCoverImage, generateFeedContent } from "@/lib/ai-content";
+import { generateComposedCoverImage, generateFeedContent } from "@/lib/ai-content";
 import { uploadMediaFile } from "@/lib/media-upload";
 import { feedGenerateSchema } from "@/lib/validation";
 import { feedService } from "@/services/feed.service";
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // don't let a hiccup there block the text content from saving.
     let thumbnailUrl: string | null = null;
     try {
-      const imageFile = await generateCoverImage(generated.imagePrompt);
+      const imageFile = await generateComposedCoverImage(generated.imagePrompt, generated.title);
       const uploaded = await uploadMediaFile({ file: imageFile, folder: "feed" });
       thumbnailUrl = uploaded.fileUrl;
     } catch (error) {
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       priority: 0,
       isFeatured: false,
       thumbnailUrl,
+      content: generated.questions ? { questions: generated.questions } : undefined,
       generationTopic: values.topic,
       publishedAt: values.scheduledPublishAt ?? null,
     });

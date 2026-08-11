@@ -7,6 +7,7 @@ import type { FormField } from "@/types/resource";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, fieldClassName } from "@/components/ui/input";
 import { MediaUploadField } from "@/components/media/media-upload-field";
+import { JobPostingContentFields } from "@/components/forms/job-posting-content-fields";
 
 export function ResourceCreateForm({
   title,
@@ -137,10 +138,12 @@ export function ResourceCreateForm({
             const Wrapper = field.type === "multiselect" ? "div" : "label";
             return (
             <Wrapper key={field.name} className={field.type === "textarea" || field.type === "multiselect" || (field.type === "url" && field.allowUpload) ? "sm:col-span-2" : ""}>
-              {field.type === "url" && field.allowUpload ? null : (
+              {(field.type === "url" && field.allowUpload) || (field.name === "content" && typeValue === "JOB_POSTING") ? null : (
                 <span className="mb-1.5 block text-sm font-medium">{field.label}</span>
               )}
-              {field.type === "textarea" ? (
+              {field.name === "content" && typeValue === "JOB_POSTING" ? (
+                <JobPostingContentFields name={field.name} defaultValue={fieldValue(field)} />
+              ) : field.type === "textarea" ? (
                 <Textarea
                   name={field.name}
                   required={field.required}

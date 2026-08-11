@@ -6,6 +6,7 @@ export type FeedActionKind =
   | "webinar"
   | "career"
   | "watch"
+  | "job"
   | "external"
   | "internal";
 
@@ -22,6 +23,8 @@ export function getFeedActionKind(type: FeedType): FeedActionKind {
     case "YOUTUBE":
     case "INSTAGRAM_REEL":
       return "watch";
+    case "JOB_POSTING":
+      return "job";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -46,6 +49,8 @@ export function getFeedActionLabel(type: FeedType): string {
     case "YOUTUBE":
     case "INSTAGRAM_REEL":
       return "Watch";
+    case "JOB_POSTING":
+      return "View job";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -62,10 +67,14 @@ export function getFeedActionHref(id: string, type: FeedType): string {
   if (kind === "webinar") return `/feed/${id}/webinar`;
   if (kind === "career") return `/feed/${id}/career`;
   if (kind === "watch") return `/feed/${id}/watch`;
+  // Deliberately NOT under /feed — job postings must stay reachable without an
+  // MCG account (partner-institute visitors have none), and /feed is gated by
+  // middleware. This is the one content type with its own public route.
+  if (kind === "job") return `/jobs/${id}`;
   return `/api/v1/feed/${id}/open`;
 }
 
-/** Path-aware href: keeps learners on an in-app page so they can mark items complete. */
+/** Path-aware href: keeps learners on an in-app page so they can mark completion. */
 export function getPathFeedItemHref(id: string, type: FeedType, learningPathId: string): string {
   const qs = `learningPathId=${encodeURIComponent(learningPathId)}`;
   const kind = getFeedActionKind(type);
@@ -74,6 +83,7 @@ export function getPathFeedItemHref(id: string, type: FeedType, learningPathId: 
   if (kind === "webinar") return `/feed/${id}/webinar?${qs}`;
   if (kind === "career") return `/feed/${id}/career?${qs}`;
   if (kind === "watch") return `/feed/${id}/watch?${qs}`;
+  if (kind === "job") return `/jobs/${id}`;
   return `/feed/${id}/engage?${qs}`;
 }
 
@@ -104,10 +114,24 @@ export type QuizQuestion = {
   answer?: number;
 };
 
+export type JobCtaType = "LINK" | "FORM" | "NONE";
+
+export type JobPostingContent = {
+  company?: string;
+  location?: string;
+  employmentType?: string;
+  eligibility?: string;
+  closesAt?: string;
+  ctaType: JobCtaType;
+  ctaLabel?: string;
+  ctaUrl?: string;
+};
+
 export type FeedContent = {
   questions?: QuizQuestion[];
   webinarAt?: string;
   location?: string;
+  job?: JobPostingContent;
 };
 
 export function parseFeedContent(value: unknown): FeedContent {
@@ -134,5 +158,25 @@ export function parseFeedContent(value: unknown): FeedContent {
     questions: questions.length > 0 ? questions : undefined,
     webinarAt: typeof record.webinarAt === "string" ? record.webinarAt : undefined,
     location: typeof record.location === "string" ? record.location : undefined,
+    job: parseJobPostingContent(record),
+  };
+}
+
+function parseJobPostingContent(record: Record<string, unknown>): JobPostingContent | undefined {
+  const raw = record.job;
+  if (!raw || typeof raw !== "object") return undefined;
+  const job = raw as Record<string, unknown>;
+
+  const ctaType: JobCtaType = job.ctaType === "LINK" || job.ctaType === "FORM" ? job.ctaType : "NONE";
+
+  return {
+    company: typeof job.company === "string" ? job.company : undefined,
+    location: typeof job.location === "string" ? job.location : undefined,
+    employmentType: typeof job.employmentType === "string" ? job.employmentType : undefined,
+    eligibility: typeof job.eligibility === "string" ? job.eligibility : undefined,
+    closesAt: typeof job.closesAt === "string" ? job.closesAt : undefined,
+    ctaType,
+    ctaLabel: typeof job.ctaLabel === "string" ? job.ctaLabel : undefined,
+    ctaUrl: ctaType === "LINK" && typeof job.ctaUrl === "string" ? job.ctaUrl : undefined,
   };
 }

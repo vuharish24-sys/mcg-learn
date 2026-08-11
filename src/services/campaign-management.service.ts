@@ -119,13 +119,29 @@ export const campaignManagementService = {
 
   listPublic() {
     const now = new Date();
+    // Registration window defaults to the campaign's own startsAt/endsAt when not
+    // explicitly overridden — a null registrationEndsAt must NOT mean "always open
+    // forever"; it means "open for as long as the campaign itself runs". Missing the
+    // end-date fallback here let campaigns keep showing as joinable long after their
+    // endsAt had passed (verified: a campaign that ended 2026-07-31 was still listed
+    // as "Active" and joinable on 2026-08-10).
     return prisma.referralCampaign.findMany({
       where: {
         isActive: true,
         status: { in: ["ACTIVE", "PAUSED"] },
-        OR: [
-          { registrationStartsAt: null },
-          { registrationStartsAt: { lte: now } },
+        AND: [
+          {
+            OR: [
+              { registrationStartsAt: { lte: now } },
+              { AND: [{ registrationStartsAt: null }, { startsAt: { lte: now } }] },
+            ],
+          },
+          {
+            OR: [
+              { registrationEndsAt: { gte: now } },
+              { AND: [{ registrationEndsAt: null }, { endsAt: { gte: now } }] },
+            ],
+          },
         ],
       },
       include: {
@@ -157,11 +173,16 @@ export const campaignManagementService = {
     if (!campaign || !campaign.isActive) throw new AppValidationError("Campaign not available");
     if (campaign.status !== "ACTIVE") throw new AppValidationError("Campaign is not open for joining");
 
+    // Falls back to the campaign's own startsAt/endsAt when no explicit registration
+    // window is set — see listPublic for why a null registrationEndsAt must not mean
+    // "open forever" (it let learners join campaigns whose endsAt had long passed).
     const now = new Date();
-    if (campaign.registrationStartsAt && campaign.registrationStartsAt > now) {
+    const registrationStart = campaign.registrationStartsAt ?? campaign.startsAt;
+    const registrationEnd = campaign.registrationEndsAt ?? campaign.endsAt;
+    if (registrationStart > now) {
       throw new AppValidationError("Campaign registration has not started");
     }
-    if (campaign.registrationEndsAt && campaign.registrationEndsAt < now) {
+    if (registrationEnd < now) {
       throw new AppValidationError("Campaign registration has ended");
     }
 

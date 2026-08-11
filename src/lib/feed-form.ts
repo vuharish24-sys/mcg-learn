@@ -13,12 +13,28 @@ const feedTypes = [
   "ADVERTISEMENT",
   "SPONSORED",
   "INTERNAL_PROMOTION",
+  "JOB_POSTING",
 ] as const;
 
 export { feedTypes };
 
+/**
+ * Feed types AI generation can actually complete end-to-end. Excludes types
+ * that need a real external asset (YouTube/Instagram video URL, a PDF file,
+ * a scheduled webinar, a linked advertiser) — AI has no way to produce those,
+ * so offering them just creates permanently-incomplete drafts.
+ */
+export const aiGeneratableFeedTypes = [
+  "ARTICLE",
+  "CAREER_TIP",
+  "ANNOUNCEMENT",
+  "INTERNAL_PROMOTION",
+  "QUIZ",
+] as const;
+
 export function feedItemFormFields(
   categories: { id: string; name: string }[],
+  partners: { id: string; name: string }[] = [],
 ): FormField[] {
   return [
     { name: "title", label: "Title", required: true },
@@ -46,10 +62,22 @@ export function feedItemFormFields(
       uploadFolder: "feed",
     },
     {
+      name: "postedByPartnerId",
+      label: "Exclusive to partner (optional)",
+      type: "select",
+      options: [
+        { value: "", label: "Global — visible to all partners & the main feed" },
+        ...partners.map((p) => ({ value: p.id, label: p.name })),
+      ],
+      showWhen: { field: "type", in: ["JOB_POSTING"] },
+    },
+    {
       name: "content",
       label: "Content JSON (quiz/webinar)",
       type: "textarea",
-      placeholder: '{"questions":[{"question":"...","options":["A","B"],"answer":0}]}',
+      placeholder:
+        'Quiz: {"questions":[{"question":"...","options":["A","B"],"answer":0}]}\n' +
+        'Webinar: {"webinarAt":"2026-12-31T18:00:00","location":"Zoom link or venue"}',
     },
     {
       name: "status",
@@ -89,6 +117,7 @@ export function feedItemInitialValues(item: {
   priority: number;
   isFeatured: boolean;
   placements?: string[];
+  postedByPartnerId?: string | null;
 }) {
   return {
     title: item.title,
@@ -97,6 +126,7 @@ export function feedItemInitialValues(item: {
     type: item.type,
     externalUrl: item.externalUrl ?? "",
     thumbnailUrl: item.thumbnailUrl ?? "",
+    postedByPartnerId: item.postedByPartnerId ?? "",
     content:
       item.content == null
         ? ""

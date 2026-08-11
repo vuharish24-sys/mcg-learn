@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   Award,
   BookOpen,
   GraduationCap,
   HeartPulse,
   LayoutDashboard,
+  LogOut,
   Megaphone,
   Network,
   Route,
@@ -35,12 +37,15 @@ export function PortalNav({
   role,
   userName,
   referralProgramJoined,
+  logoUrl,
 }: {
   role: string;
   userName: string;
   referralProgramJoined: boolean;
+  logoUrl?: string | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const items: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: [] },
     { href: "/profile", label: "Profile", icon: UserCircle, roles: [] },
@@ -65,7 +70,12 @@ export function PortalNav({
     <>
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white md:flex md:flex-col dark:border-slate-800 dark:bg-slate-950">
         <Link href="/dashboard" className="flex h-20 items-center gap-3 px-6 text-lg font-bold text-teal-800 dark:text-teal-300">
-          <span className="rounded-lg bg-gradient-to-br from-teal-600 to-violet-600 p-2 text-white"><HeartPulse className="size-5" /></span>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="size-9 rounded-lg object-contain" />
+          ) : (
+            <span className="rounded-lg bg-gradient-to-br from-teal-600 to-violet-600 p-2 text-white"><HeartPulse className="size-5" /></span>
+          )}
           MCG Learn
         </Link>
         <nav className="flex-1 space-y-1 px-3">
@@ -113,6 +123,17 @@ export function PortalNav({
             </Link>
           );
         })}
+        <button
+          type="button"
+          onClick={async () => {
+            await createSupabaseBrowserClient().auth.signOut();
+            router.replace("/login");
+            router.refresh();
+          }}
+          className="flex min-w-20 flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[10px] text-slate-600 transition-colors dark:text-slate-400"
+        >
+          <LogOut className="size-5" /> Sign out
+        </button>
       </div>
     </>
   );

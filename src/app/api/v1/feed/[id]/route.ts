@@ -65,6 +65,7 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(values.thumbnailUrl !== undefined ? { thumbnailUrl: values.thumbnailUrl || null } : {}),
       ...(values.externalUrl !== undefined ? { externalUrl: values.externalUrl || null } : {}),
       ...(values.placements !== undefined ? { placements: values.placements } : {}),
+      ...(values.postedByPartnerId !== undefined ? { postedByPartnerId: values.postedByPartnerId || null } : {}),
       ...(content !== undefined ? { content } : {}),
       publishedAt:
         values.publishedAt !== undefined

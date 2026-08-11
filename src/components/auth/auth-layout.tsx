@@ -7,12 +7,14 @@ export function AuthLayout({
   title,
   tagline,
   footer,
+  logoUrl,
   children,
 }: {
   eyebrow: string;
   title: string;
   tagline?: ReactNode;
   footer?: ReactNode;
+  logoUrl?: string | null;
   children: ReactNode;
 }) {
   return (
@@ -22,7 +24,12 @@ export function AuthLayout({
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-amber-400/20 blur-3xl" />
 
         <div className="relative flex items-center gap-3 text-xl font-bold">
-          <span className="rounded-xl bg-white/15 p-2"><HeartPulse /></span>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="size-10 rounded-xl bg-white/15 object-contain p-1" />
+          ) : (
+            <span className="rounded-xl bg-white/15 p-2"><HeartPulse /></span>
+          )}
           MCG Learn
         </div>
         <div className="relative">

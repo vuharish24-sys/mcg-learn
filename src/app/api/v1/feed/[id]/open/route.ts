@@ -3,6 +3,7 @@ import { apiError } from "@/lib/api";
 import { getApiUser } from "@/lib/auth";
 import { getFeedActionKind } from "@/lib/feed-actions";
 import { prisma } from "@/lib/prisma";
+import { advertisementService } from "@/services/advertisement.service";
 
 export async function GET(
   request: Request,
@@ -24,27 +25,16 @@ export async function GET(
   const redirectsInternally =
     kind === "quiz" || kind === "pdf" || kind === "webinar" || kind === "career" || kind === "watch";
 
-  await prisma.$transaction(async (tx) => {
-    if (!redirectsInternally && !(learningPathId && item.externalUrl)) {
-      await tx.feedItem.update({
-        where: { id },
-        data: { viewCount: { increment: 1 } },
-      });
-    }
+  if (!redirectsInternally && !(learningPathId && item.externalUrl)) {
+    await prisma.feedItem.update({
+      where: { id },
+      data: { viewCount: { increment: 1 } },
+    });
+  }
 
-    if (item.advertisement) {
-      const now = new Date();
-      await tx.advertisement.updateMany({
-        where: {
-          id: item.advertisement.id,
-          status: "ACTIVE",
-          startsAt: { lte: now },
-          endsAt: { gte: now },
-        },
-        data: { clicks: { increment: 1 } },
-      });
-    }
-  });
+  if (item.advertisement) {
+    await advertisementService.recordClick(item.advertisement.id);
+  }
 
   function withPathQuery(pathname: string) {
     const url = new URL(pathname, origin);

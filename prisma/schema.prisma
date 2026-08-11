@@ -20,6 +20,7 @@ enum FeedType {
   ADVERTISEMENT
   SPONSORED
   INTERNAL_PROMOTION
+  JOB_POSTING
 }
 
 /** Where a feed item is allowed to render. FEED = today's default (main feed). */
@@ -267,6 +268,9 @@ model FeedItem {
   type          FeedType
   externalUrl   String?        @map("external_url")
   content       Json?
+  /** JOB_POSTING only: exclusive to this partner's board (+ any partner subscribed to it) instead of MCG's main feed. Null = global, visible everywhere, as with every other feed item. */
+  postedByPartnerId String?  @map("posted_by_partner_id")
+  postedByPartner   Partner? @relation(fields: [postedByPartnerId], references: [id], onDelete: SetNull)
   previewTitle       String?   @map("preview_title")
   previewDescription String?   @map("preview_description")
   previewImageUrl    String?   @map("preview_image_url")
@@ -280,6 +284,11 @@ model FeedItem {
   placements    FeedPlacement[] @default([FEED])
   /** The topic/prompt an admin gave the AI generator. Null for manually-authored items. */
   generationTopic String? @map("generation_topic")
+  /** Groups multi-asset content series generated from one master topic. Null for one-off items. */
+  contentSeriesId String?        @map("content_series_id")
+  contentSeries   ContentSeries? @relation(fields: [contentSeriesId], references: [id], onDelete: SetNull)
+  /** This asset's specific angle within its content series, e.g. "Day 3 – ICD-10-CM vs CPT". */
+  seriesAngle     String?        @map("series_angle")
   advertisement        Advertisement?
   learningPathItems    LearningPathItem[]
   requiredForPaths     LearningPath[]             @relation("RequiredQuizPath")
@@ -292,7 +301,22 @@ model FeedItem {
   @@index([status, publishedAt])
   @@index([categoryId])
   @@index([type])
+  @@index([contentSeriesId])
+  @@index([postedByPartnerId])
   @@map("feed_items")
+}
+
+/**
+ * A master topic's multi-asset content plan (Admin > Feed > Generate Content Series).
+ * Each generated FeedItem in the series links back here via contentSeriesId.
+ */
+model ContentSeries {
+  id        String     @id @default(cuid())
+  topic     String
+  feedItems FeedItem[]
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@map("content_series")
 }
 
 model Lead {
@@ -874,4 +898,119 @@ model AiProviderConfig {
 
   @@index([enabled, priority])
   @@map("ai_provider_configs")
+}
+
+/**
+ * Minimal, zero-dependency conversion-funnel tracking (no external analytics
+ * service). Currently only logs landing-page visits; "visits -> registrations"
+ * is computed by comparing counts here against User.createdAt directly rather
+ * than also logging a registration event, since the register API route fires
+ * on every login (profile sync), not just first-time signup, so instrumenting
+ * it would double-count.
+ */
+model FunnelEvent {
+  id        String   @id @default(cuid())
+  type      String
+  source    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([type, createdAt])
+  @@map("funnel_events")
+}
+
+enum PartnerStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/**
+ * A partner institute given white-labeled, time-boxed access to MCG's job
+ * board via a single unguessable link (/placements/[accessCode]). Viewing
+ * the board requires being on the partner's PartnerCandidate allowlist
+ * (matched by email/phone) — no full MCG account needed, just that. A
+ * separate secret managementCode (/partners/manage/[managementCode]) is how
+ * the partner's own staff add candidates to that allowlist, kept distinct
+ * from accessCode so a student holding the board link can never add
+ * themselves or others to it.
+ *
+ * By default every partner sees the same global (unowned) JOB_POSTING
+ * FeedItems; a posting can optionally be scoped exclusively to one partner
+ * via FeedItem.postedByPartnerId, and other partners can gain visibility
+ * into it through an admin-approved PartnerSubscription.
+ */
+model Partner {
+  id             String        @id @default(cuid())
+  name           String
+  slug           String        @unique
+  logoUrl        String?       @map("logo_url")
+  accessCode     String        @unique @map("access_code")
+  managementCode String        @unique @map("management_code")
+  status         PartnerStatus @default(ACTIVE)
+  accessStartsAt DateTime?     @map("access_starts_at")
+  accessEndsAt   DateTime?     @map("access_ends_at")
+  contactName    String?       @map("contact_name")
+  contactEmail   String?       @map("contact_email")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  exclusiveJobPostings   FeedItem[]
+  subscriptionsRequested PartnerSubscription[] @relation("RequestingPartner")
+  subscriptionsReceived  PartnerSubscription[] @relation("TargetPartner")
+  candidates             PartnerCandidate[]
+
+  @@map("partners")
+}
+
+/**
+ * A candidate the partner has added to their board allowlist. Viewing the
+ * board requires matching an email/phone here. Access lasts 7 days from
+ * firstLoginAt (the first successful identity check) unless enrolledAt is
+ * set by MCG staff, which grants indefinite access.
+ */
+model PartnerCandidate {
+  id           String    @id @default(cuid())
+  partnerId    String    @map("partner_id")
+  partner      Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  fullName     String?   @map("full_name")
+  email        String?
+  phone        String?
+  firstLoginAt DateTime? @map("first_login_at")
+  enrolledAt   DateTime? @map("enrolled_at")
+  sessionToken String?   @unique @map("session_token")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([partnerId, email])
+  @@index([partnerId, phone])
+  @@map("partner_candidates")
+}
+
+enum PartnerSubscriptionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/**
+ * A partner's request to also see another partner's exclusive job board
+ * (postings with a matching FeedItem.postedByPartnerId). Self-service:
+ * submitted from the requesting partner's own /placements page (identified
+ * by their access code, since partners have no login), then approved or
+ * rejected by an MCG admin from /admin/partners.
+ */
+model PartnerSubscription {
+  id                  String                    @id @default(cuid())
+  requestingPartnerId String                    @map("requesting_partner_id")
+  requestingPartner   Partner                   @relation("RequestingPartner", fields: [requestingPartnerId], references: [id], onDelete: Cascade)
+  targetPartnerId     String                    @map("target_partner_id")
+  targetPartner       Partner                   @relation("TargetPartner", fields: [targetPartnerId], references: [id], onDelete: Cascade)
+  status              PartnerSubscriptionStatus @default(PENDING)
+  contactName         String?                   @map("contact_name")
+  contactEmail        String?                   @map("contact_email")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+
+  @@unique([requestingPartnerId, targetPartnerId])
+  @@map("partner_subscriptions")
 }

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, fieldClassName } from "@/components/ui/input";
-import { feedTypes } from "@/lib/feed-form";
+import { aiGeneratableFeedTypes } from "@/lib/feed-form";
 import { enumLabel } from "@/lib/utils";
 
 export function GenerateFeedItemForm({ categories }: { categories: { id: string; name: string }[] }) {
@@ -120,10 +120,14 @@ export function GenerateFeedItemForm({ categories }: { categories: { id: string;
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium">Content type</span>
               <select className={fieldClassName} value={type} onChange={(e) => setType(e.target.value)}>
-                {feedTypes.map((value) => (
+                {aiGeneratableFeedTypes.map((value) => (
                   <option key={value} value={value}>{enumLabel(value)}</option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Video/file/scheduled types (YouTube, Instagram Reel, PDF, Webinar, ads) aren&rsquo;t offered here —
+                AI can&rsquo;t produce a real video, file, or event, so add those manually instead.
+              </p>
             </label>
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium">Category</span>

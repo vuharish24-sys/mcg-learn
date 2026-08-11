@@ -37,7 +37,7 @@ export function LearningPathForm({
   method?: "POST" | "PATCH";
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(!initial);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<PathItem[]>(
@@ -101,6 +101,23 @@ export function LearningPathForm({
     setSubmitting(false);
     if (!response.ok) {
       setError(result.error?.message ?? "Unable to save learning path");
+      return;
+    }
+    setOpen(false);
+    router.refresh();
+  }
+
+  async function remove() {
+    if (!initial) return;
+    if (!window.confirm("Delete this learning path permanently? This cannot be undone.")) return;
+
+    setSubmitting(true);
+    setError("");
+    const response = await fetch(endpoint, { method: "DELETE" });
+    const result = await response.json().catch(() => ({}));
+    setSubmitting(false);
+    if (!response.ok) {
+      setError(result.error?.message ?? "Unable to delete");
       return;
     }
     setOpen(false);
@@ -206,6 +223,11 @@ export function LearningPathForm({
 
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
+            {initial && (
+              <Button type="button" variant="ghost" className="mr-auto text-red-700" disabled={submitting} onClick={remove}>
+                <Trash2 className="size-4" /> Delete
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : "Save learning path"}</Button>
           </div>

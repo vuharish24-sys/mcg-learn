@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       thumbnailUrl: values.thumbnailUrl || null,
       externalUrl: values.externalUrl || null,
       placements: values.placements,
+      postedByPartnerId: values.postedByPartnerId || null,
       ...(content !== undefined ? { content } : {}),
       publishedAt:
         values.status === "PUBLISHED"

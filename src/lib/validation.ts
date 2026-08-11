@@ -10,6 +10,7 @@ export const feedItemSchema = z.object({
   type: z.enum([
     "ARTICLE", "YOUTUBE", "INSTAGRAM_REEL", "PDF", "QUIZ", "CAREER_TIP",
     "ANNOUNCEMENT", "WEBINAR", "ADVERTISEMENT", "SPONSORED", "INTERNAL_PROMOTION",
+    "JOB_POSTING",
   ]),
   externalUrl: optionalUrl,
   content: z.union([z.string(), z.record(z.string(), z.unknown()), z.null()]).optional(),
@@ -18,17 +19,38 @@ export const feedItemSchema = z.object({
   isFeatured: z.coerce.boolean().default(false),
   publishedAt: z.coerce.date().nullable().optional(),
   placements: z.array(z.enum(["FEED", "LEARNING_PATH_LIST"])).min(1).default(["FEED"]),
+  postedByPartnerId: z.string().trim().nullable().optional(),
 });
 
 export const feedGenerateSchema = z.object({
   topic: z.string().trim().min(3).max(300),
-  type: z.enum([
-    "ARTICLE", "YOUTUBE", "INSTAGRAM_REEL", "PDF", "QUIZ", "CAREER_TIP",
-    "ANNOUNCEMENT", "WEBINAR", "ADVERTISEMENT", "SPONSORED", "INTERNAL_PROMOTION",
-  ]),
+  // Restricted to types AI can complete end-to-end (no external video/file/schedule needed).
+  type: z.enum(["ARTICLE", "CAREER_TIP", "ANNOUNCEMENT", "INTERNAL_PROMOTION", "QUIZ"]),
   categoryId: z.string().min(1),
   // When set, the item is created as DRAFT and a scheduled job publishes it at this time.
   scheduledPublishAt: z.coerce.date().nullable().optional(),
+});
+
+export const contentMapSchema = z.object({
+  topic: z.string().trim().min(3).max(300),
+  count: z.coerce.number().int().min(3).max(10).default(6),
+});
+
+const contentMapAngleFormat = z.enum(["ARTICLE", "CAREER_TIP", "QUIZ", "ANNOUNCEMENT", "INTERNAL_PROMOTION"]);
+
+export const contentSeriesGenerateSchema = z.object({
+  topic: z.string().trim().min(3).max(300),
+  categoryId: z.string().min(1),
+  angles: z
+    .array(
+      z.object({
+        day: z.coerce.number().int().min(1),
+        angle: z.string().trim().min(3).max(200),
+        format: contentMapAngleFormat,
+      }),
+    )
+    .min(1)
+    .max(10),
 });
 
 export const aiProviderCreateSchema = z.object({
@@ -291,4 +313,71 @@ export const commissionPaymentSchema = z.object({
   paymentMethod: z.enum(["UPI", "BANK_TRANSFER", "CASH", "CHEQUE", "OTHER"]),
   referenceNumber: z.string().trim().max(120).nullable().optional(),
   remarks: z.string().trim().max(2000).nullable().optional(),
+});
+
+// --- Placement / job board ---
+
+/** Submitted from the public, unauthenticated job-posting page — no admin/officer role required. */
+export const jobInterestSchema = z.object({
+  feedItemId: z.string().min(1),
+  fullName: z.string().trim().min(2).max(120),
+  email: z.union([z.email(), z.literal(""), z.null()]).optional(),
+  phone: z.string().trim().min(7).max(20),
+  notes: z.string().trim().max(2000).optional(),
+  partnerAccessCode: z.string().trim().max(100).optional(),
+});
+
+export const partnerCreateSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only"),
+  logoUrl: optionalUrl,
+  status: z.enum(["ACTIVE", "PAUSED", "ARCHIVED"]).default("ACTIVE"),
+  accessStartsAt: z.coerce.date().nullable().optional(),
+  accessEndsAt: z.coerce.date().nullable().optional(),
+  contactName: z.string().trim().max(160).nullable().optional(),
+  contactEmail: z.union([z.email(), z.literal(""), z.null()]).optional(),
+});
+
+export const partnerUpdateSchema = partnerCreateSchema.partial();
+
+/**
+ * Submitted from the requesting partner's own /placements page (identified
+ * by their access code — partners have no login) to ask for visibility into
+ * another partner's exclusive job board. Admin approves/rejects afterward.
+ */
+export const partnerSubscriptionRequestSchema = z.object({
+  requestingAccessCode: z.string().trim().min(1),
+  targetPartnerId: z.string().trim().min(1),
+  contactName: z.string().trim().max(160).optional(),
+  contactEmail: z.union([z.email(), z.literal(""), z.null()]).optional(),
+});
+
+export const partnerSubscriptionStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED"]),
+});
+
+/** Submitted from the partner's private management link — not the public student board link. */
+export const partnerCandidateCreateSchema = z
+  .object({
+    fullName: z.string().trim().max(160).optional(),
+    email: z.union([z.email(), z.literal(""), z.null()]).optional(),
+    phone: z.string().trim().max(20).optional(),
+  })
+  .refine((v) => (v.email && v.email.trim()) || (v.phone && v.phone.trim()), {
+    message: "Provide an email or phone number",
+    path: ["email"],
+  });
+
+/** Submitted from the public student board to verify they're on the partner's allowlist. */
+export const partnerCandidateLoginSchema = z.object({
+  identifier: z.string().trim().min(3).max(160),
+});
+
+export const partnerCandidateEnrollSchema = z.object({
+  enrolled: z.boolean(),
 });

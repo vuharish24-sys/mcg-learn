@@ -7,17 +7,20 @@ import { enumLabel, formatDate } from "@/lib/utils";
 import { feedItemFormFields, feedItemInitialValues } from "@/lib/feed-form";
 import { ResourceCreateForm } from "@/components/forms/resource-create-form";
 import { GenerateFeedItemForm } from "@/components/forms/generate-feed-item-form";
+import { GenerateContentSeriesForm } from "@/components/forms/generate-content-series-form";
+import { PublishFeedItemButton } from "@/components/forms/publish-feed-item-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function AdminFeedPage() {
   await requireRole(["ADMIN"]);
   await feedService.ensureMissingPreviews(25);
-  const [items, categories] = await Promise.all([
+  const [items, categories, partners] = await Promise.all([
     feedService.list({ includeDrafts: true, sort: "latest" }),
     prisma.feedCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.partner.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
-  const fields = feedItemFormFields(categories);
+  const fields = feedItemFormFields(categories, partners);
 
   return (
     <div className="space-y-6">
@@ -30,6 +33,7 @@ export default async function AdminFeedPage() {
           <p className="mt-1 text-slate-500">Create, edit, publish, and delete Learning Feed posts.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <GenerateContentSeriesForm categories={categories} />
           <GenerateFeedItemForm categories={categories} />
           <ResourceCreateForm title="Add feed item" endpoint="/api/v1/feed" fields={fields} />
         </div>
@@ -49,8 +53,14 @@ export default async function AdminFeedPage() {
                       ? ` · ${formatDate(item.publishedAt)}`
                       : ""}
                 </p>
-                {item.generationTopic && (
-                  <p className="mt-1 text-xs text-slate-400">Generated from: &ldquo;{item.generationTopic}&rdquo;</p>
+                {item.contentSeriesId && item.seriesAngle ? (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Series: &ldquo;{item.generationTopic}&rdquo; — {item.seriesAngle}
+                  </p>
+                ) : (
+                  item.generationTopic && (
+                    <p className="mt-1 text-xs text-slate-400">Generated from: &ldquo;{item.generationTopic}&rdquo;</p>
+                  )
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -69,15 +79,18 @@ export default async function AdminFeedPage() {
             </CardHeader>
             <CardContent className="flex flex-wrap items-center justify-between gap-4">
               <p className="line-clamp-2 max-w-2xl text-sm text-slate-500">{item.description}</p>
-              <ResourceCreateForm
-                title="Edit feed item"
-                editLabel="Edit"
-                endpoint={`/api/v1/feed/${item.id}`}
-                method="PATCH"
-                allowDelete
-                fields={fields}
-                initialValues={feedItemInitialValues(item)}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                {item.status === "DRAFT" && <PublishFeedItemButton id={item.id} />}
+                <ResourceCreateForm
+                  title="Edit feed item"
+                  editLabel="Edit"
+                  endpoint={`/api/v1/feed/${item.id}`}
+                  method="PATCH"
+                  allowDelete
+                  fields={fields}
+                  initialValues={feedItemInitialValues(item)}
+                />
+              </div>
             </CardContent>
           </Card>
         ))}
