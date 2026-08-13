@@ -21,6 +21,7 @@ enum FeedType {
   SPONSORED
   INTERNAL_PROMOTION
   JOB_POSTING
+  COURSE
 }
 
 /** Where a feed item is allowed to render. FEED = today's default (main feed). */
@@ -295,6 +296,8 @@ model FeedItem {
   pathItemCompletions UserPathItemCompletion[]
   quizAttempts         QuizAttempt[]
   campaignFeedLinks    CampaignFeedLink[]
+  /** COURSE only: benefits (coupons/scholarships/perks) mapped onto this course's variants. */
+  courseVariantBenefits CourseVariantBenefit[]
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
@@ -1013,4 +1016,61 @@ model PartnerSubscription {
 
   @@unique([requestingPartnerId, targetPartnerId])
   @@map("partner_subscriptions")
+}
+
+enum BenefitKind {
+  /** Flat amount off the base fee, e.g. ₹2,000 off. */
+  DISCOUNT_FLAT
+  /** Percentage off the base fee. */
+  DISCOUNT_PERCENT
+  /** A code a learner enters elsewhere (no automatic discount math here). */
+  PROMO_CODE
+  /** A non-monetary perk, e.g. "Includes 1 free mock exam". */
+  PERK
+}
+
+/**
+ * A coupon, scholarship, or other perk — created once, then mapped onto any
+ * number of course variants across any number of courses via
+ * CourseVariantBenefit. Auto-expires: isBenefitActive() checks isActive plus
+ * the startsAt/expiresAt window, same pattern as isPartnerAccessOpen.
+ */
+model Benefit {
+  id              String      @id @default(cuid())
+  title           String
+  kind            BenefitKind
+  code            String?
+  discountAmount  Int?        @map("discount_amount")
+  discountPercent Int?        @map("discount_percent")
+  description     String?
+  imageUrl        String?     @map("image_url")
+  startsAt        DateTime?   @map("starts_at")
+  expiresAt       DateTime?   @map("expires_at")
+  isActive        Boolean     @default(true) @map("is_active")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  variantMappings CourseVariantBenefit[]
+
+  @@map("benefits")
+}
+
+/**
+ * Maps a Benefit onto one specific course variant. variantId is a soft
+ * reference to the stable id embedded in FeedItem.content.course.variants —
+ * variants live in JSON (not their own table), so this isn't a hard FK to a
+ * variant row, only to the owning FeedItem (course) and the Benefit.
+ */
+model CourseVariantBenefit {
+  id         String   @id @default(cuid())
+  feedItemId String   @map("feed_item_id")
+  feedItem   FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  variantId  String   @map("variant_id")
+  benefitId  String   @map("benefit_id")
+  benefit    Benefit  @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([variantId, benefitId])
+  @@index([feedItemId])
+  @@map("course_variant_benefits")
 }

@@ -7,6 +7,7 @@ export type FeedActionKind =
   | "career"
   | "watch"
   | "job"
+  | "course"
   | "external"
   | "internal";
 
@@ -25,6 +26,8 @@ export function getFeedActionKind(type: FeedType): FeedActionKind {
       return "watch";
     case "JOB_POSTING":
       return "job";
+    case "COURSE":
+      return "course";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -51,6 +54,8 @@ export function getFeedActionLabel(type: FeedType): string {
       return "Watch";
     case "JOB_POSTING":
       return "View job";
+    case "COURSE":
+      return "View course";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -71,6 +76,7 @@ export function getFeedActionHref(id: string, type: FeedType): string {
   // MCG account (partner-institute visitors have none), and /feed is gated by
   // middleware. This is the one content type with its own public route.
   if (kind === "job") return `/jobs/${id}`;
+  if (kind === "course") return `/feed/${id}/course`;
   return `/api/v1/feed/${id}/open`;
 }
 
@@ -84,6 +90,7 @@ export function getPathFeedItemHref(id: string, type: FeedType, learningPathId: 
   if (kind === "career") return `/feed/${id}/career?${qs}`;
   if (kind === "watch") return `/feed/${id}/watch?${qs}`;
   if (kind === "job") return `/jobs/${id}`;
+  if (kind === "course") return `/feed/${id}/course?${qs}`;
   return `/feed/${id}/engage?${qs}`;
 }
 
@@ -127,11 +134,39 @@ export type JobPostingContent = {
   ctaUrl?: string;
 };
 
+export type CourseCtaType = "LINK" | "FORM" | "NONE";
+
+/**
+ * One priced option of a course — e.g. "Batch Classes, Online" vs.
+ * "One-to-One, Offline". tier + mode are independent dimensions (a course
+ * can offer several tiers, each in several modes). id is a stable
+ * client-generated identifier (not a DB primary key — variants live in this
+ * JSON array) used to map Benefit rows (coupons/scholarships/perks) onto a
+ * specific variant via CourseVariantBenefit.
+ */
+export type CourseVariant = {
+  id: string;
+  mode: string;
+  tier?: string;
+  fee?: string;
+  duration?: string;
+  startDate?: string;
+  ctaType: CourseCtaType;
+  ctaLabel?: string;
+  ctaUrl?: string;
+};
+
+export type CourseContent = {
+  instructor?: string;
+  variants: CourseVariant[];
+};
+
 export type FeedContent = {
   questions?: QuizQuestion[];
   webinarAt?: string;
   location?: string;
   job?: JobPostingContent;
+  course?: CourseContent;
 };
 
 export function parseFeedContent(value: unknown): FeedContent {
@@ -159,6 +194,7 @@ export function parseFeedContent(value: unknown): FeedContent {
     webinarAt: typeof record.webinarAt === "string" ? record.webinarAt : undefined,
     location: typeof record.location === "string" ? record.location : undefined,
     job: parseJobPostingContent(record),
+    course: parseCourseContent(record),
   };
 }
 
@@ -179,4 +215,80 @@ function parseJobPostingContent(record: Record<string, unknown>): JobPostingCont
     ctaLabel: typeof job.ctaLabel === "string" ? job.ctaLabel : undefined,
     ctaUrl: ctaType === "LINK" && typeof job.ctaUrl === "string" ? job.ctaUrl : undefined,
   };
+}
+
+function parseCourseVariant(raw: unknown, fallbackId: string): CourseVariant | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const variant = raw as Record<string, unknown>;
+  if (typeof variant.mode !== "string" || !variant.mode.trim()) return undefined;
+
+  const ctaType: CourseCtaType =
+    variant.ctaType === "LINK" || variant.ctaType === "FORM" ? variant.ctaType : "NONE";
+
+  return {
+    id: typeof variant.id === "string" && variant.id ? variant.id : fallbackId,
+    mode: variant.mode,
+    tier: typeof variant.tier === "string" ? variant.tier : undefined,
+    fee: typeof variant.fee === "string" ? variant.fee : undefined,
+    duration: typeof variant.duration === "string" ? variant.duration : undefined,
+    startDate: typeof variant.startDate === "string" ? variant.startDate : undefined,
+    ctaType,
+    ctaLabel: typeof variant.ctaLabel === "string" ? variant.ctaLabel : undefined,
+    ctaUrl: ctaType === "LINK" && typeof variant.ctaUrl === "string" ? variant.ctaUrl : undefined,
+  };
+}
+
+function parseCourseContent(record: Record<string, unknown>): CourseContent | undefined {
+  const raw = record.course;
+  if (!raw || typeof raw !== "object") return undefined;
+  const course = raw as Record<string, unknown>;
+
+  const variants = Array.isArray(course.variants)
+    ? course.variants
+        .map((v, i) => parseCourseVariant(v, `legacy-${i}`))
+        .filter((v): v is CourseVariant => v !== undefined)
+    : [];
+  if (variants.length === 0) return undefined;
+
+  return {
+    instructor: typeof course.instructor === "string" ? course.instructor : undefined,
+    variants,
+  };
+}
+
+export type VariantBenefitMapping = { variantId: string; benefitIds: string[] };
+
+/**
+ * The course admin form submits `variantBenefits` as a sibling of `course`
+ * inside the same content JSON (so a single Save button can carry both the
+ * content update and the relational benefit-mapping sync). This pulls that
+ * mapping out and returns the content with it stripped, since the mapping
+ * itself lives in CourseVariantBenefit, not in the stored content JSON.
+ */
+export function extractVariantBenefits(content: unknown): {
+  content: unknown;
+  variantBenefits: VariantBenefitMapping[];
+} {
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    return { content, variantBenefits: [] };
+  }
+  const record = content as Record<string, unknown>;
+  if (!("variantBenefits" in record)) return { content, variantBenefits: [] };
+
+  const { variantBenefits: raw, ...rest } = record;
+  const variantBenefits: VariantBenefitMapping[] = Array.isArray(raw)
+    ? raw
+        .filter(
+          (row): row is { variantId: string; benefitIds: unknown[] } =>
+            !!row && typeof row === "object" && typeof (row as Record<string, unknown>).variantId === "string",
+        )
+        .map((row) => ({
+          variantId: row.variantId,
+          benefitIds: Array.isArray(row.benefitIds)
+            ? row.benefitIds.filter((id): id is string => typeof id === "string")
+            : [],
+        }))
+    : [];
+
+  return { content: rest, variantBenefits };
 }

@@ -8,6 +8,8 @@ const schema = z.object({
   email: z.union([z.email(), z.literal(""), z.null()]).optional(),
   phone: z.string().trim().min(7).max(20),
   notes: z.string().trim().max(2000).nullable().optional(),
+  /** Which course mode/version this submission is for, when the item has multiple variants. */
+  variantMode: z.string().trim().max(60).optional(),
 });
 
 export async function POST(
@@ -23,7 +25,7 @@ export async function POST(
       where: {
         id,
         status: "PUBLISHED",
-        type: { in: ["WEBINAR", "CAREER_TIP"] },
+        type: { in: ["WEBINAR", "CAREER_TIP", "COURSE"] },
       },
     });
     if (!item) return apiError("Feed item not found", 404);
@@ -32,7 +34,9 @@ export async function POST(
     const source =
       item.type === "WEBINAR"
         ? `Webinar: ${item.title}`
-        : `Career Guidance: ${item.title}`;
+        : item.type === "COURSE"
+          ? `Course: ${item.title}${values.variantMode ? ` (${values.variantMode})` : ""}`
+          : `Career Guidance: ${item.title}`;
 
     const lead = await prisma.$transaction(async (tx) => {
       const created = await tx.lead.create({

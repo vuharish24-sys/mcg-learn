@@ -10,7 +10,7 @@ export const feedItemSchema = z.object({
   type: z.enum([
     "ARTICLE", "YOUTUBE", "INSTAGRAM_REEL", "PDF", "QUIZ", "CAREER_TIP",
     "ANNOUNCEMENT", "WEBINAR", "ADVERTISEMENT", "SPONSORED", "INTERNAL_PROMOTION",
-    "JOB_POSTING",
+    "JOB_POSTING", "COURSE",
   ]),
   externalUrl: optionalUrl,
   content: z.union([z.string(), z.record(z.string(), z.unknown()), z.null()]).optional(),
@@ -380,4 +380,41 @@ export const partnerCandidateLoginSchema = z.object({
 
 export const partnerCandidateEnrollSchema = z.object({
   enrolled: z.boolean(),
+});
+
+// --- Course benefits (coupons / scholarships / perks) ---
+
+export const benefitCreateSchema = z
+  .object({
+    title: z.string().trim().min(2).max(160),
+    kind: z.enum(["DISCOUNT_FLAT", "DISCOUNT_PERCENT", "PROMO_CODE", "PERK"]),
+    code: z.string().trim().max(60).nullable().optional(),
+    discountAmount: z.coerce.number().int().min(0).nullable().optional(),
+    discountPercent: z.coerce.number().int().min(0).max(100).nullable().optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    imageUrl: z.string().trim().max(500).nullable().optional(),
+    startsAt: z.coerce.date().nullable().optional(),
+    expiresAt: z.coerce.date().nullable().optional(),
+    isActive: z.coerce.boolean().default(true),
+  })
+  .refine((v) => v.kind !== "DISCOUNT_FLAT" || (v.discountAmount ?? 0) > 0, {
+    message: "Discount amount is required for a flat discount",
+    path: ["discountAmount"],
+  })
+  .refine((v) => v.kind !== "DISCOUNT_PERCENT" || (v.discountPercent ?? 0) > 0, {
+    message: "Discount percent is required for a percentage discount",
+    path: ["discountPercent"],
+  });
+
+export const benefitUpdateSchema = z.object({
+  title: z.string().trim().min(2).max(160).optional(),
+  kind: z.enum(["DISCOUNT_FLAT", "DISCOUNT_PERCENT", "PROMO_CODE", "PERK"]).optional(),
+  code: z.string().trim().max(60).nullable().optional(),
+  discountAmount: z.coerce.number().int().min(0).nullable().optional(),
+  discountPercent: z.coerce.number().int().min(0).max(100).nullable().optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  imageUrl: z.string().trim().max(500).nullable().optional(),
+  startsAt: z.coerce.date().nullable().optional(),
+  expiresAt: z.coerce.date().nullable().optional(),
+  isActive: z.coerce.boolean().optional(),
 });

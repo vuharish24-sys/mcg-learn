@@ -3,6 +3,8 @@ import { getApiUser } from "@/lib/auth";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { feedItemSchema } from "@/lib/validation";
 import { feedService } from "@/services/feed.service";
+import { extractVariantBenefits } from "@/lib/feed-actions";
+import { benefitService } from "@/services/benefit.service";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -53,6 +55,14 @@ export async function PATCH(request: Request, { params }: Params) {
       return apiError("Content JSON is invalid", 422);
     }
 
+    const effectiveType = values.type ?? existing.type;
+    let variantBenefits: { variantId: string; benefitIds: string[] }[] = [];
+    if (effectiveType === "COURSE" && content !== undefined && content !== Prisma.JsonNull) {
+      const extracted = extractVariantBenefits(content);
+      content = extracted.content as Prisma.InputJsonValue;
+      variantBenefits = extracted.variantBenefits;
+    }
+
     const nextStatus = values.status ?? existing.status;
     const item = await feedService.update(id, {
       ...(values.title !== undefined ? { title: values.title } : {}),
@@ -74,6 +84,10 @@ export async function PATCH(request: Request, { params }: Params) {
             ? new Date()
             : undefined,
     });
+
+    if (effectiveType === "COURSE" && content !== undefined && content !== Prisma.JsonNull) {
+      await benefitService.syncVariantBenefits(id, variantBenefits);
+    }
 
     return apiSuccess(item);
   } catch (error) {

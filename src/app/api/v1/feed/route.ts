@@ -3,6 +3,8 @@ import { getApiUser } from "@/lib/auth";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { feedItemSchema } from "@/lib/validation";
 import { feedService } from "@/services/feed.service";
+import { extractVariantBenefits } from "@/lib/feed-actions";
+import { benefitService } from "@/services/benefit.service";
 
 export async function GET(request: Request) {
   const user = await getApiUser();
@@ -38,6 +40,13 @@ export async function POST(request: Request) {
       content = values.content as Prisma.InputJsonValue;
     }
 
+    let variantBenefits: { variantId: string; benefitIds: string[] }[] = [];
+    if (values.type === "COURSE" && content !== undefined) {
+      const extracted = extractVariantBenefits(content);
+      content = extracted.content as Prisma.InputJsonValue;
+      variantBenefits = extracted.variantBenefits;
+    }
+
     const item = await feedService.create({
       title: values.title,
       description: values.description,
@@ -56,6 +65,11 @@ export async function POST(request: Request) {
           ? (values.publishedAt ?? new Date())
           : values.publishedAt,
     });
+
+    if (values.type === "COURSE") {
+      await benefitService.syncVariantBenefits(item.id, variantBenefits);
+    }
+
     return apiSuccess(item, 201);
   } catch (error) {
     return handleApiError(error);

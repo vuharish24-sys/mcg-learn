@@ -11,12 +11,15 @@ export function FeedLeadForm({
   defaultName,
   defaultEmail,
   defaultPhone,
+  variantMode,
 }: {
   endpoint: string;
   submitLabel: string;
   defaultName?: string;
   defaultEmail?: string;
   defaultPhone?: string;
+  /** For multi-variant courses: which mode/version this submission is for, so the lead is tagged correctly. */
+  variantMode?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -35,6 +38,7 @@ export function FeedLeadForm({
         email: formData.get("email") || null,
         phone: formData.get("phone"),
         notes: formData.get("notes") || null,
+        ...(variantMode ? { variantMode } : {}),
       }),
     });
     const result = await response.json();

@@ -1,4 +1,6 @@
+import { Briefcase, GraduationCap, Gift } from "lucide-react";
 import { enumLabel, formatDate } from "@/lib/utils";
+import { parseFeedContent } from "@/lib/feed-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { FeedActionButton } from "@/components/feed/feed-action-button";
@@ -21,6 +23,7 @@ type FeedCardItem = {
   previewImageUrl: string | null;
   previewSiteName: string | null;
   category: { name: string };
+  content?: unknown;
 };
 
 function hostnameFromUrl(url: string | null) {
@@ -32,14 +35,29 @@ function hostnameFromUrl(url: string | null) {
   }
 }
 
-export function FeedPreviewCard({ item }: { item: FeedCardItem }) {
+export function FeedPreviewCard({ item, hasBenefit }: { item: FeedCardItem; hasBenefit?: boolean }) {
   const imageUrl = item.previewImageUrl || item.thumbnailUrl;
   const displayTitle = item.title;
   const displayDescription = item.description;
   const siteLabel = item.previewSiteName || hostnameFromUrl(item.externalUrl);
+  const isJob = item.type === "JOB_POSTING";
+  const isCourse = item.type === "COURSE";
+  const job = isJob ? parseFeedContent(item.content).job : undefined;
+  const course = isCourse ? parseFeedContent(item.content).course : undefined;
+  const jobMeta = job ? [job.company, job.location, job.employmentType].filter(Boolean).join(" · ") : null;
+  const courseModes = course ? [...new Set(course.variants.map((v) => v.mode))].join(", ") : null;
+  const courseMeta = course ? [course.instructor, courseModes].filter(Boolean).join(" · ") : null;
 
   return (
-    <Card className="group w-full overflow-hidden border-0 shadow-md ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:ring-slate-800">
+    <Card
+      className={`group w-full overflow-hidden shadow-md ring-1 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
+        isJob
+          ? "border-l-4 border-violet-500 ring-slate-200/80 dark:ring-slate-800"
+          : isCourse
+            ? "border-l-4 border-sky-500 ring-slate-200/80 dark:ring-slate-800"
+            : "border-0 ring-slate-200/80 dark:ring-slate-800"
+      }`}
+    >
       <MediaCover
         src={imageUrl}
         alt={displayTitle}
@@ -52,8 +70,33 @@ export function FeedPreviewCard({ item }: { item: FeedCardItem }) {
 
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2.5 sm:p-3">
           <div className="flex min-w-0 flex-wrap gap-1.5">
-            <Badge className="bg-white/95 text-teal-900 shadow-sm">{enumLabel(item.type)}</Badge>
+            {isJob ? (
+              <Badge className="gap-1 bg-violet-600 text-white shadow-sm">
+                <Briefcase className="size-3" /> Job Posting
+              </Badge>
+            ) : isCourse ? (
+              <Badge className="gap-1 bg-sky-600 text-white shadow-sm">
+                <GraduationCap className="size-3" /> Course
+              </Badge>
+            ) : (
+              <Badge className="bg-white/95 text-teal-900 shadow-sm">{enumLabel(item.type)}</Badge>
+            )}
             {item.isFeatured && <Badge className="bg-amber-100 text-amber-900 shadow-sm">Featured</Badge>}
+            {job?.closesAt && (
+              <Badge className="bg-white/95 text-slate-700 shadow-sm">
+                Closes {formatDate(job.closesAt)}
+              </Badge>
+            )}
+            {course && course.variants.length > 1 && (
+              <Badge className="bg-white/95 text-slate-700 shadow-sm">
+                {course.variants.length} modes
+              </Badge>
+            )}
+            {isCourse && hasBenefit && (
+              <Badge className="gap-1 bg-amber-500 text-white shadow-sm">
+                <Gift className="size-3" /> Offer
+              </Badge>
+            )}
           </div>
           {item.status !== "PUBLISHED" && (
             <Badge className="shrink-0 bg-black/50 text-white backdrop-blur-sm">{item.status}</Badge>
@@ -76,12 +119,26 @@ export function FeedPreviewCard({ item }: { item: FeedCardItem }) {
             <h2 className="line-clamp-2 text-sm font-bold leading-snug sm:text-base lg:text-lg">
               {displayTitle}
             </h2>
+            {jobMeta && (
+              <p className="mt-1 truncate text-xs font-semibold text-violet-200 sm:text-sm">{jobMeta}</p>
+            )}
+            {courseMeta && (
+              <p className="mt-1 truncate text-xs font-semibold text-sky-200 sm:text-sm">{courseMeta}</p>
+            )}
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/85 sm:text-sm">
               {displayDescription}
             </p>
           </div>
           {item.status === "PUBLISHED" && (
-            <div className="[&_a]:h-9 [&_a]:w-full [&_a]:bg-white [&_a]:text-teal-900 sm:[&_a]:w-auto [&_a]:hover:bg-teal-50">
+            <div
+              className={
+                isJob
+                  ? "[&_a]:h-9 [&_a]:w-full [&_a]:bg-violet-600 [&_a]:text-white sm:[&_a]:w-auto [&_a]:hover:bg-violet-500"
+                  : isCourse
+                    ? "[&_a]:h-9 [&_a]:w-full [&_a]:bg-sky-600 [&_a]:text-white sm:[&_a]:w-auto [&_a]:hover:bg-sky-500"
+                    : "[&_a]:h-9 [&_a]:w-full [&_a]:bg-white [&_a]:text-teal-900 sm:[&_a]:w-auto [&_a]:hover:bg-teal-50"
+              }
+            >
               <FeedActionButton id={item.id} type={item.type} externalUrl={item.externalUrl} />
             </div>
           )}

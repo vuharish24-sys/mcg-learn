@@ -3,14 +3,19 @@ import { Search } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { feedService } from "@/services/feed.service";
+import { learningPathService } from "@/services/learning-path.service";
+import { benefitService } from "@/services/benefit.service";
 import { enumLabel } from "@/lib/utils";
 import { feedItemFormFields, feedTypes } from "@/lib/feed-form";
+import { spaceOutAds, interleavePaths, interleaveExtra } from "@/lib/feed-merge";
 import { Input, fieldClassName } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ResourceCreateForm } from "@/components/forms/resource-create-form";
 import { AdImpressionTracker } from "@/components/feed/ad-impression-tracker";
 import { FeedPreviewCard } from "@/components/feed/feed-preview-card";
+import { LearningPathCard } from "@/components/learning-path/learning-path-card";
+import { BenefitCard } from "@/components/feed/benefit-card";
 
 export default async function FeedPage({
   searchParams,
@@ -38,6 +43,10 @@ export default async function FeedPage({
     prisma.feedCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 
+  const courseIdsWithBenefit = await benefitService.getFeedItemIdsWithActiveBenefit(
+    items.filter((item) => item.type === "COURSE").map((item) => item.id),
+  );
+
   const now = new Date();
   const adIds = items
     .filter(
@@ -48,6 +57,47 @@ export default async function FeedPage({
         item.advertisement.endsAt >= now,
     )
     .map((item) => item.advertisement!.id);
+
+  // Only sprinkle in learning-path cards on the plain, unfiltered browse view —
+  // a search or type filter means the visitor wants FeedItems specifically.
+  const isDefaultBrowse = !search && !category && !type && !featured && sort === "latest";
+  const pathCards = isDefaultBrowse
+    ? await (async () => {
+        const [continueLearning, recommended] = await Promise.all([
+          learningPathService.getContinueLearning(user.id),
+          learningPathService.getRecommended(user.id),
+        ]);
+        const continueCards = continueLearning.map((row) => ({
+          key: row.learningPath.id,
+          path: row.learningPath,
+          href: row.continueHref ?? `/learning-paths/${row.learningPath.slug}`,
+          progressPercent: row.progressPercent,
+          ctaLabel: "Continue",
+        }));
+        const continueIds = new Set(continueCards.map((c) => c.key));
+        const recommendedCards = recommended
+          .filter((path) => !continueIds.has(path.id))
+          .map((path) => ({
+            key: path.id,
+            path,
+            href: `/learning-paths/${path.slug}`,
+            progressPercent: undefined as number | undefined,
+            ctaLabel: "Explore",
+          }));
+        return [...continueCards, ...recommendedCards].slice(0, 4);
+      })()
+    : [];
+  const benefitCards = isDefaultBrowse
+    ? await benefitService.listActiveMappedWithCourseCounts({ includeDrafts: user.role.key === "ADMIN" })
+    : [];
+
+  const orderedItems = isDefaultBrowse ? spaceOutAds(items) : items;
+  const feedCardsWithPaths = isDefaultBrowse
+    ? interleavePaths(orderedItems, pathCards, 5)
+    : orderedItems.map((item) => ({ kind: "feed" as const, item }));
+  const feedCards = isDefaultBrowse
+    ? interleaveExtra(feedCardsWithPaths, benefitCards, (benefit) => ({ kind: "benefit" as const, benefit }), 6)
+    : feedCardsWithPaths;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -114,9 +164,25 @@ export default async function FeedPage({
         </Card>
       ) : (
         <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
-          {items.map((item) => (
-            <FeedPreviewCard key={item.id} item={item} />
-          ))}
+          {feedCards.map((card) =>
+            card.kind === "path" ? (
+              <LearningPathCard
+                key={`path-${card.path.key}`}
+                path={card.path.path}
+                href={card.path.href}
+                progressPercent={card.path.progressPercent}
+                ctaLabel={card.path.ctaLabel}
+              />
+            ) : card.kind === "benefit" ? (
+              <BenefitCard key={`benefit-${card.benefit.id}`} benefit={card.benefit} />
+            ) : (
+              <FeedPreviewCard
+                key={card.item.id}
+                item={card.item}
+                hasBenefit={courseIdsWithBenefit.has(card.item.id)}
+              />
+            ),
+          )}
         </div>
       )}
     </div>

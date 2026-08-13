@@ -24,7 +24,7 @@ export function MediaUploadField({
 }: {
   name?: string;
   label?: string;
-  folder?: "referral-campaigns" | "referral-payments" | "feed" | "general";
+  folder?: "referral-campaigns" | "referral-payments" | "feed" | "benefits" | "general";
   purpose?: "image" | "proof";
   required?: boolean;
   defaultUrl?: string;

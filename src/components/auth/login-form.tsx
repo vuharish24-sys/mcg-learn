@@ -17,11 +17,16 @@ const schema = z.object({
 
 type LoginValues = z.infer<typeof schema>;
 
-function safeNextPath(value: string | null) {
-  if (!value) return "/dashboard";
-  if (!value.startsWith("/")) return "/dashboard";
-  if (value.startsWith("//")) return "/dashboard";
-  if (value.startsWith("/login") || value.startsWith("/register")) return "/dashboard";
+function defaultLandingPath(role?: string) {
+  return role === "LEARNER" || role === "TRAINER" ? "/feed" : "/dashboard";
+}
+
+function safeNextPath(value: string | null, role?: string) {
+  const fallback = defaultLandingPath(role);
+  if (!value) return fallback;
+  if (!value.startsWith("/")) return fallback;
+  if (value.startsWith("//")) return fallback;
+  if (value.startsWith("/login") || value.startsWith("/register")) return fallback;
   return value;
 }
 
@@ -55,11 +60,13 @@ export function LoginForm() {
       }
 
       // Complete learner/trainer profile sync (role + trainer row from signup metadata).
-      await fetch("/api/v1/auth/register", {
+      const syncResponse = await fetch("/api/v1/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
+      const syncResult = await syncResponse.json().catch(() => null);
+      const role = typeof syncResult?.data?.role === "string" ? syncResult.data.role : undefined;
 
       const storedReferral =
         referralCode ??
@@ -76,7 +83,7 @@ export function LoginForm() {
         }
       }
 
-      router.replace(safeNextPath(searchParams.get("next")));
+      router.replace(safeNextPath(searchParams.get("next"), role));
       router.refresh();
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Unable to sign in");

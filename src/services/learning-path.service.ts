@@ -472,7 +472,7 @@ export const learningPathService = {
   },
 
   async getLearnerStats(userId: string) {
-    const [pathsInProgress, pathsCompleted, certificates, quizAttempts, passedAttempts] =
+    const [pathsInProgress, pathsCompleted, certificates, quizAttempts, passedAttempts, continueLearning] =
       await Promise.all([
         prisma.userLearningProgress.count({ where: { userId, status: "IN_PROGRESS" } }),
         prisma.userLearningProgress.count({ where: { userId, status: "COMPLETED" } }),
@@ -482,26 +482,13 @@ export const learningPathService = {
           select: { percentage: true, passed: true },
         }),
         prisma.quizAttempt.count({ where: { userId, passed: true } }),
+        this.getContinueLearning(userId),
       ]);
 
     const avgQuizScore =
       quizAttempts.length > 0
         ? Math.round(quizAttempts.reduce((sum, a) => sum + a.percentage, 0) / quizAttempts.length)
         : 0;
-
-    const continueLearningRaw = await prisma.userLearningProgress.findMany({
-      where: { userId, status: "IN_PROGRESS" },
-      include: { learningPath: { include: pathInclude } },
-      orderBy: { lastActivityAt: "desc" },
-      take: 3,
-    });
-
-    const continueLearning = await Promise.all(
-      continueLearningRaw.map(async (row) => ({
-        ...row,
-        continueHref: await this.getContinueHref(userId, row.learningPathId),
-      })),
-    );
 
     return {
       pathsInProgress,
@@ -514,5 +501,42 @@ export const learningPathService = {
           : 0,
       continueLearning,
     };
+  },
+
+  /** In-progress paths for this learner, most recently active first — used on the dashboard and interleaved into /feed. */
+  async getContinueLearning(userId: string, take = 3) {
+    const rows = await prisma.userLearningProgress.findMany({
+      where: { userId, status: "IN_PROGRESS" },
+      include: { learningPath: { include: pathInclude } },
+      orderBy: { lastActivityAt: "desc" },
+      take,
+    });
+
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        continueHref: await this.getContinueHref(userId, row.learningPathId),
+      })),
+    );
+  },
+
+  /** Published/public paths this learner hasn't touched yet, featured first — for feed/dashboard recommendations. */
+  async getRecommended(userId: string, take = 4) {
+    const touchedPathIds = await prisma.userLearningProgress.findMany({
+      where: { userId },
+      select: { learningPathId: true },
+    });
+    const excludeIds = touchedPathIds.map((row) => row.learningPathId);
+
+    return prisma.learningPath.findMany({
+      where: {
+        status: "PUBLISHED",
+        visibility: "PUBLIC",
+        ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}),
+      },
+      include: pathInclude,
+      orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
+      take,
+    });
   },
 };

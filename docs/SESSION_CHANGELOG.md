@@ -1,8 +1,8 @@
 # MCG Learn — Session Changelog
 
-**Date:** 2026-08-08 (updated — see §8–10 for this update)
-**Period:** 2026-08-01 → 2026-08-08
-**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding
+**Date:** 2026-08-13 (updated — see §11–15 for this update)
+**Period:** 2026-08-01 → 2026-08-13
+**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system
 **Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI
 
 ---
@@ -140,7 +140,7 @@ Verified live: the real Instagram post ("The Unknown Profession") renders its fu
 
 ---
 
-## 10. Known gaps (current)
+## 10. Known gaps (as of 2026-08-08)
 
 - No automated test suite (pre-existing gap, flagged in `RC_AUDIT_REPORT.md`, still true)
 - CRM, trainers, and admin management screens weren't touched in the design pass (only dashboard/nav/auth/achievements)
@@ -149,3 +149,76 @@ Verified live: the real Instagram post ("The Unknown Profession") renders its fu
 - Email deliverability at real volume depends on Supabase Auth's configured email provider — not verifiable from code
 - YouTube/Instagram likes and comments are not implemented — Instagram is a hard platform wall; YouTube would need a new Google OAuth integration (separate future scope)
 - Cleanup scripts for one-off DB verification should be double-checked with a follow-up query, not just trusted from their own console output (see §9 incidental finding)
+
+---
+
+## 11. Placement / job-board system
+
+A parallel product surface for partner institutes (colleges/training centers) to post jobs and manage candidate access, largely reachable without an MCG account.
+
+- **Job postings**: new `JOB_POSTING` `FeedType`, its own public detail page (`/jobs/[id]`, deliberately outside the `/feed` middleware gate) and job-interest lead capture endpoint
+- **Partner model**: each partner gets a branded public job board (`/placements/[accessCode]`) and a separate self-service management link (`/partners/manage/[managementCode]`) for their own staff to add candidates — kept as two distinct secrets so a candidate holding the board link can never add themselves to the allowlist
+- **Candidate gating**: viewing a partner's board requires matching an email/phone on that partner's `PartnerCandidate` allowlist; access lasts 7 days from first login unless MCG staff mark the candidate "enrolled" (indefinite access)
+- **Exclusive vs. global postings**: a job posting can optionally be scoped to one partner (`postedByPartnerId`) instead of appearing on MCG's main feed; other partners can request read access via an admin-approved `PartnerSubscription`
+- **Admin tooling**: full Partners CRUD, subscription approve/reject queue, candidate list with manual "mark enrolled" action
+- **Job card decoration**: violet-accented card treatment (left border, badge, "Closes {date}" chip) distinguishing job postings from other feed content
+
+Verified end-to-end multiple times through this build (partner-owned vs. global visibility, subscription request/approval flow, candidate 7-day vs. indefinite access, admin CRUD) — see the original task breakdown for the full list of scenarios exercised. Already committed (`e9dd2e4`).
+
+---
+
+## 12. Merged feed + dashboard redesign
+
+Replaced the flat feed list and dashboard with a more engaging, single-surface experience.
+
+- **Dashboard**: gradient hero banner, time-of-day greeting, tinted stat cards with icons (previously a flat, uniform layout)
+- **Merged `/feed`**: on the default (unfiltered) browse view, `LearningPathCard`s ("Continue learning" + "Recommended") are interleaved with regular feed items every 5 positions — pulled from a model (`LearningPath`) that was never a `FeedItem` at all, matched at render time rather than duplicating data into the feed table
+- **Ad density guardrail**: `spaceOutAds()` holds back `ADVERTISEMENT`/`SPONSORED` items so several high-priority ads can't cluster together, keeping a minimum gap of organic content between them; gracefully degrades (remaining ads append at the end) if the feed doesn't have enough non-ad content to fully space them
+- **Role-aware landing**: Learner/Trainer roles now land on `/feed` after login instead of `/dashboard`; Admin/Career Officer unchanged
+
+Verified live (real logged-in session): dashboard visual redesign, feed interleaving order, and an adversarial stress test of the ad-spacing algorithm (documented limitation, not a bug: 3 simultaneous max-priority ads in a small feed can still end up adjacent at the tail when there isn't enough organic content to interleave with).
+
+---
+
+## 13. Course catalog with multi-variant pricing
+
+Extended the feed with a `COURSE` content type, then reshaped it to match how MCG actually prices programs.
+
+- New `COURSE` `FeedType`; friendly admin form (`CourseContentFields`) swaps in for the generic JSON textarea, same pattern already used for job postings
+- **Variants array**: a course can offer several priced options — independent `tier` (e.g. Batch Classes vs. One-to-One) × `mode` (Online/Hybrid/Offline) combinations, each with its own fee, duration, start date, and enrollment CTA (external link or lead-capture form)
+- Each variant carries a stable, client-generated `id` (used later by the benefit system to map coupons onto a specific priced option, not just the course as a whole)
+- Course detail page lists every variant as its own card; feed preview card shows a sky-accented badge and "{N} modes" summary instead of a single price
+- **Real data import**: the 10 actual MCG course programs (from a pasted pricing sheet spanning Normal/Plus tiers × Online/Hybrid/Offline, with early-bird offers) were imported as `DRAFT` feed items — draft on purpose, since real pricing shouldn't go live without an explicit publish step
+
+Verified end-to-end (multi-variant creation, per-variant lead capture, feed card summary) and the 10 imported courses spot-checked for correct rendering.
+
+---
+
+## 14. Coupon / scholarship (Benefit) system
+
+Replaced the ad-hoc `launchFee`/`offerLabel` fields bolted onto course variants with a proper, reusable benefit model — prompted by a request to "configure and map coupons or scholarships with an expiry date."
+
+- **Schema**: `Benefit` (title, kind — flat discount / percent discount / promo code / perk — code, discount amount/percent, description, image, active window) + `CourseVariantBenefit`, a soft-reference join mapping a benefit onto one specific course variant (`variantId` matches the client-generated id embedded in the course's JSON content, since variants aren't their own DB table)
+- **Reusable by design**: one benefit (e.g. "₹2,000 off") can be mapped onto any number of variants across any number of courses — confirmed as a requirement before building, rather than assumed
+- **Auto-expiry**: `isBenefitActive()` computes liveness from `isActive` + the start/expiry window at read time, same pattern as the existing partner-access-window check — no cron job needed
+- **Effective pricing**: the course detail page shows the single best-value discount struck through against the base fee (e.g. ~~₹8,000~~ ₹6,000), with the applied benefit's title and code shown alongside
+- **Admin UX**: `/admin/benefits` CRUD page; the course edit form grew a per-variant checklist of available benefits, saved through the same single "Save" button as the rest of the course content (the API route extracts and strips the mapping array from the submitted JSON, then syncs the relational table)
+- **Standalone feed cards**: an active, mapped benefit now also renders as its own gradient promo card interleaved into `/feed` (every 6 positions), separate from the course cards it's attached to — clicking through goes to a dedicated `/feed/benefits/[id]` page listing every course/variant it applies to
+- **Image upload**: benefits can carry a cover image (Supabase Storage upload or a pasted URL, reusing the same upload component used elsewhere in the app), shown on the admin list, the feed promo card, and the detail page
+- **Data migration**: the 10 imported courses' original ad-hoc offer fields (`launchFee`/`offerLabel`) were converted into 4 real, reusable `Benefit` rows and mapped onto the correct variants
+
+**Bug found and fixed during this build**: the new benefit feed cards initially had no course-visibility filter at all — since every real course is currently `DRAFT`, every non-admin learner would have seen a benefit card advertising courses they couldn't actually reach (a dead-end click-through). Fixed by scoping `listActiveMappedWithCourseCounts()` to published courses for non-admin viewers (and dropping a benefit from the feed entirely if it has zero visible courses); verified directly against the database that admin and non-admin viewers now see different, correct results.
+
+Verified live throughout: benefit creation/mapping/editing, effective-price calculation on the course page, the PATCH-route sync (toggled a mapping in the browser, confirmed the database updated, reverted), the standalone feed card and its detail page for both a single-course and a seven-course benefit, and the full image-upload round trip (uploaded a real file, confirmed it landed in Supabase Storage under a dedicated `benefits/` folder, rendered correctly in three places, then cleaned up the test image).
+
+---
+
+## 15. Known gaps (current, 2026-08-13)
+
+Carried forward from §10 (still true): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented.
+
+New/updated since §10:
+- **Course fee is free text**, not a structured number (e.g. "₹15,000" or "Free" or blank) — a mapped discount silently has no effect if the fee field contains no digits. No error, just no visible effect; worth a real currency field if pricing logic grows further.
+- **All 10 real courses are still `DRAFT`** — a live learner today sees no course, job offer, or benefit card yet. This is a content/publish-state decision, not a missing feature.
+- Feed-card spacing intervals (ads every 4, learning paths every 5, benefits every 6) are hardcoded, not admin-configurable.
+- A variant-id fallback inconsistency exists between the course detail page's read-time default and the admin form's default, but only for a course that predates the variant `id` field *and* has never been re-saved through the admin form since — doesn't affect any course currently in the database.

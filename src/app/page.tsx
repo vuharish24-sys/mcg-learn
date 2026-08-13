@@ -56,7 +56,9 @@ const steps = [
 
 export default async function HomePage() {
   const user = await getCurrentUser();
-  if (user) redirect("/dashboard");
+  if (user) {
+    redirect(user.role.key === "LEARNER" || user.role.key === "TRAINER" ? "/feed" : "/dashboard");
+  }
   const [, logoUrl] = await Promise.all([trackVisit("landing"), getBrandingLogoUrl()]);
 
   return (

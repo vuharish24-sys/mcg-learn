@@ -6,9 +6,14 @@ import {
   Megaphone,
   Network,
   Route,
+  Sparkles,
   Trophy,
   UserPlus,
   Users,
+  Wallet,
+  Clock3,
+  CheckCircle2,
+  BadgeIndianRupee,
 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getDashboardData } from "@/services/dashboard.service";
@@ -27,12 +32,31 @@ type Stat = {
   href?: string;
 };
 
-const STAT_BADGE_COLORS = [
-  "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
-  "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+const STAT_STYLES = [
+  {
+    badge: "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
+    card: "border-teal-100 bg-teal-50/50 dark:border-teal-950 dark:bg-teal-950/10",
+  },
+  {
+    badge: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+    card: "border-violet-100 bg-violet-50/50 dark:border-violet-950 dark:bg-violet-950/10",
+  },
+  {
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    card: "border-amber-100 bg-amber-50/50 dark:border-amber-950 dark:bg-amber-950/10",
+  },
+  {
+    badge: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+    card: "border-rose-100 bg-rose-50/50 dark:border-rose-950 dark:bg-rose-950/10",
+  },
 ];
+
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -111,27 +135,38 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 sm:space-y-7">
-      <div>
-        <p className="text-sm font-medium text-teal-700">{user.role.name} dashboard</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-          Welcome,{" "}
-          <span className="bg-gradient-to-r from-teal-600 to-violet-600 bg-clip-text text-transparent">
-            {user.fullName.split(" ")[0]}
+      <div className="relative overflow-hidden rounded-3xl border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-violet-50 p-6 dark:border-teal-950 dark:from-teal-950/30 dark:via-slate-900 dark:to-violet-950/20 sm:p-8">
+        <div className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-gradient-to-br from-teal-400/25 to-violet-400/25 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-12 size-56 rounded-full bg-gradient-to-tr from-violet-400/15 to-teal-400/15 blur-3xl" />
+        <div className="relative">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-teal-800 shadow-sm ring-1 ring-teal-900/5 backdrop-blur-sm dark:bg-white/10 dark:text-teal-300 dark:ring-white/10">
+            <Sparkles className="size-3.5" /> {user.role.name} dashboard
           </span>
-        </h1>
-        <p className="mt-2 text-sm text-slate-500 sm:text-base">{subtitle}</p>
+          <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
+            {greeting()},{" "}
+            <span className="bg-gradient-to-r from-teal-600 to-violet-600 bg-clip-text text-transparent">
+              {user.fullName.split(" ")[0]}
+            </span>
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-slate-600 dark:text-slate-400 sm:text-base">{subtitle}</p>
+        </div>
       </div>
 
       {!advisingReady && (
         <Card className="border-teal-200 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/40">
           <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-teal-900 dark:text-teal-200">
-                Complete your advising profile
-              </p>
-              <p className="mt-1 text-sm text-teal-800/80 dark:text-teal-300/80">
-                Add qualification, date of birth, and goals so we can recommend the right courses.
-              </p>
+            <div className="flex items-start gap-3">
+              <span className="rounded-xl bg-teal-100 p-2.5 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                <Sparkles className="size-5" />
+              </span>
+              <div>
+                <p className="font-semibold text-teal-900 dark:text-teal-200">
+                  Complete your advising profile
+                </p>
+                <p className="mt-1 text-sm text-teal-800/80 dark:text-teal-300/80">
+                  Add qualification, date of birth, and goals so we can recommend the right courses.
+                </p>
+              </div>
             </div>
             <Link href="/profile" className={buttonVariants({ size: "sm" })}>
               Update profile
@@ -143,35 +178,55 @@ export default async function DashboardPage() {
       {(commissionSummary.totalEarned > 0 || isAdminLike) && (
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card className="border-0 bg-gradient-to-br from-teal-600 to-violet-600 text-white shadow-lg shadow-teal-600/20">
-            <CardContent className="p-4">
-              <p className="text-xs text-teal-100">Commission earned</p>
-              <p className="mt-1 text-xl font-bold">
-                ₹{commissionSummary.totalEarned.toLocaleString("en-IN")}
-              </p>
+            <CardContent className="flex items-center gap-3 p-4">
+              <span className="rounded-xl bg-white/15 p-2.5">
+                <Wallet className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-teal-100">Commission earned</p>
+                <p className="mt-0.5 truncate text-xl font-bold">
+                  ₹{commissionSummary.totalEarned.toLocaleString("en-IN")}
+                </p>
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-xs text-slate-500">Pending</p>
-              <p className="mt-1 text-xl font-bold">
-                ₹{commissionSummary.pending.amount.toLocaleString("en-IN")}
-              </p>
+          <Card className="border-amber-100 bg-amber-50/50 dark:border-amber-950 dark:bg-amber-950/10">
+            <CardContent className="flex items-center gap-3 p-4">
+              <span className="rounded-xl bg-amber-100 p-2.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                <Clock3 className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-slate-500">Pending</p>
+                <p className="mt-0.5 truncate text-xl font-bold">
+                  ₹{commissionSummary.pending.amount.toLocaleString("en-IN")}
+                </p>
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-xs text-slate-500">Approved</p>
-              <p className="mt-1 text-xl font-bold">
-                ₹{commissionSummary.approved.amount.toLocaleString("en-IN")}
-              </p>
+          <Card className="border-teal-100 bg-teal-50/50 dark:border-teal-950 dark:bg-teal-950/10">
+            <CardContent className="flex items-center gap-3 p-4">
+              <span className="rounded-xl bg-teal-100 p-2.5 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                <CheckCircle2 className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-slate-500">Approved</p>
+                <p className="mt-0.5 truncate text-xl font-bold">
+                  ₹{commissionSummary.approved.amount.toLocaleString("en-IN")}
+                </p>
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-xs text-slate-500">Paid</p>
-              <p className="mt-1 text-xl font-bold">
-                ₹{commissionSummary.paid.amount.toLocaleString("en-IN")}
-              </p>
+          <Card className="border-violet-100 bg-violet-50/50 dark:border-violet-950 dark:bg-violet-950/10">
+            <CardContent className="flex items-center gap-3 p-4">
+              <span className="rounded-xl bg-violet-100 p-2.5 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                <BadgeIndianRupee className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-slate-500">Paid</p>
+                <p className="mt-0.5 truncate text-xl font-bold">
+                  ₹{commissionSummary.paid.amount.toLocaleString("en-IN")}
+                </p>
+              </div>
             </CardContent>
           </Card>
         </section>
@@ -179,9 +234,10 @@ export default async function DashboardPage() {
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
         {stats.map(({ label, value, icon: Icon, href }, index) => {
+          const style = STAT_STYLES[index % STAT_STYLES.length];
           const content = (
             <CardContent className="flex items-center gap-4 p-5">
-              <span className={`rounded-xl p-3 ${STAT_BADGE_COLORS[index % STAT_BADGE_COLORS.length]}`}>
+              <span className={`rounded-xl p-3 ${style.badge}`}>
                 <Icon className="size-5" />
               </span>
               <div className="min-w-0">
@@ -192,10 +248,10 @@ export default async function DashboardPage() {
           );
           return href ? (
             <Link key={label} href={href}>
-              <Card className="transition duration-300 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-lg">{content}</Card>
+              <Card className={`${style.card} transition duration-300 hover:-translate-y-0.5 hover:shadow-lg`}>{content}</Card>
             </Link>
           ) : (
-            <Card key={label}>{content}</Card>
+            <Card key={label} className={style.card}>{content}</Card>
           );
         })}
       </section>

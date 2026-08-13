@@ -6,6 +6,7 @@ const FOLDERS = new Set<MediaFolder>([
   "referral-campaigns",
   "referral-payments",
   "feed",
+  "benefits",
   "general",
 ]);
 

@@ -22,6 +22,32 @@ export default async function AdminFeedPage() {
   ]);
   const fields = feedItemFormFields(categories, partners);
 
+  // Course variant→benefit mappings live relationally, not in content JSON —
+  // fold them back into each course's initial content here so the edit form
+  // can pre-select the right checkboxes without a separate fetch per item.
+  const courseIds = items.filter((item) => item.type === "COURSE").map((item) => item.id);
+  const existingMappings = courseIds.length
+    ? await prisma.courseVariantBenefit.findMany({ where: { feedItemId: { in: courseIds } } })
+    : [];
+  const mappingsByFeedItem = new Map<string, Map<string, string[]>>();
+  for (const mapping of existingMappings) {
+    const byVariant = mappingsByFeedItem.get(mapping.feedItemId) ?? new Map<string, string[]>();
+    byVariant.set(mapping.variantId, [...(byVariant.get(mapping.variantId) ?? []), mapping.benefitId]);
+    mappingsByFeedItem.set(mapping.feedItemId, byVariant);
+  }
+
+  function initialValuesFor(item: (typeof items)[number]) {
+    const values = feedItemInitialValues(item);
+    if (item.type !== "COURSE") return values;
+    const byVariant = mappingsByFeedItem.get(item.id);
+    if (!byVariant || typeof item.content !== "object" || item.content === null) return values;
+    const variantBenefits = [...byVariant.entries()].map(([variantId, benefitIds]) => ({
+      variantId,
+      benefitIds,
+    }));
+    return { ...values, content: JSON.stringify({ ...item.content, variantBenefits }, null, 2) };
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -88,7 +114,7 @@ export default async function AdminFeedPage() {
                   method="PATCH"
                   allowDelete
                   fields={fields}
-                  initialValues={feedItemInitialValues(item)}
+                  initialValues={initialValuesFor(item)}
                 />
               </div>
             </CardContent>

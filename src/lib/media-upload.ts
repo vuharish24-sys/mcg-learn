@@ -22,6 +22,7 @@ export type MediaFolder =
   | "referral-campaigns"
   | "referral-payments"
   | "feed"
+  | "benefits"
   | "general";
 
 function extensionFor(mime: string, originalName: string) {

@@ -14,6 +14,7 @@ const feedTypes = [
   "SPONSORED",
   "INTERNAL_PROMOTION",
   "JOB_POSTING",
+  "COURSE",
 ] as const;
 
 export { feedTypes };
