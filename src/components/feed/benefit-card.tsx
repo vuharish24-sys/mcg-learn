@@ -16,7 +16,7 @@ export type BenefitFeedCardData = {
   courseCount: number;
 };
 
-function benefitHeadline(benefit: BenefitFeedCardData) {
+export function benefitHeadline(benefit: BenefitFeedCardData) {
   if (benefit.kind === "DISCOUNT_FLAT") return `₹${(benefit.discountAmount ?? 0).toLocaleString("en-IN")} off`;
   if (benefit.kind === "DISCOUNT_PERCENT") return `${benefit.discountPercent ?? 0}% off`;
   if (benefit.kind === "PROMO_CODE") return "Promo code";
@@ -25,7 +25,7 @@ function benefitHeadline(benefit: BenefitFeedCardData) {
 
 export function BenefitCard({ benefit }: { benefit: BenefitFeedCardData }) {
   return (
-    <Link href={`/feed/benefits/${benefit.id}`} className="group block h-full w-full">
+    <Link href={`/feed/benefits/${benefit.id}`} prefetch={false} className="group block h-full w-full">
       <Card className="relative flex aspect-square h-full w-full flex-col justify-between overflow-hidden border-0 bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 p-4 text-white shadow-md ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg sm:p-5 dark:ring-slate-800">
         {benefit.imageUrl && (
           <>
@@ -43,7 +43,7 @@ export function BenefitCard({ benefit }: { benefit: BenefitFeedCardData }) {
 
         <div className="relative flex items-start justify-between gap-2">
           <Badge className="gap-1 bg-white/20 text-white shadow-none backdrop-blur-sm">
-            <Gift className="size-3" /> Benefit
+            <Gift className="size-3" /> Scholarship
           </Badge>
           {benefit.code && (
             <span className="rounded-md border border-dashed border-white/60 px-2 py-1 text-[10px] font-bold tracking-wide">

@@ -3,7 +3,7 @@ import { AppValidationError } from "@/lib/api";
 import { aiProviderService } from "@/services/ai-provider.service";
 import { composeCoverImage } from "@/lib/image-compose";
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const GROQ_MODEL = "llama-3.3-70b-versatile";

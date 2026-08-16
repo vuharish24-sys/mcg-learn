@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, RotateCcw, Trophy } from "lucide-react";
 import type { QuizQuestion } from "@/lib/feed-actions";
 import { Button } from "@/components/ui/button";
-import { CertificateEarnedBanner } from "@/components/learning-path/certificate-earned-banner";
+import { RewardEarnedBanner } from "@/components/learning-path/reward-earned-banner";
 
 type QuizResult = {
   passed: boolean;
@@ -14,6 +14,8 @@ type QuizResult = {
   answerKey: Record<number, number>;
   certificateJustIssued: boolean;
   certificateNumber: string | null;
+  badgeJustIssued: boolean;
+  badgeIcon: string | null;
 };
 
 export function QuizPlayer({
@@ -160,7 +162,10 @@ export function QuizPlayer({
             </div>
           )}
 
-          {result?.certificateJustIssued && <CertificateEarnedBanner advisingReady={advisingReady} />}
+          {result?.certificateJustIssued && <RewardEarnedBanner kind="certificate" advisingReady={advisingReady} />}
+          {result?.badgeJustIssued && (
+            <RewardEarnedBanner kind="badge" icon={result.badgeIcon} advisingReady={advisingReady} />
+          )}
 
           {!submitting && !result && !error && (
             <p className="flex items-center gap-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900">

@@ -160,6 +160,8 @@ export const learningPathSchema = z.object({
   requiredQuizFeedItemId: z.string().nullable().optional(),
   quizPassPercentage: z.coerce.number().int().min(0).max(100).default(60),
   certificateTemplate: z.string().trim().max(200).nullable().optional(),
+  rewardType: z.enum(["CERTIFICATE", "BADGE"]).default("CERTIFICATE"),
+  badgeIcon: z.string().trim().max(16).nullable().optional(),
   items: z.array(learningPathItemSchema).optional(),
 });
 

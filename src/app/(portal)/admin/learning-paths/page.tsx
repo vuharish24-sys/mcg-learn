@@ -95,6 +95,8 @@ export default async function AdminLearningPathsPage() {
                         requiredQuizFeedItemId: path.requiredQuizFeedItemId ?? "",
                         quizPassPercentage: String(path.quizPassPercentage),
                         certificateTemplate: path.certificateTemplate ?? "",
+                        rewardType: path.rewardType,
+                        badgeIcon: path.badgeIcon ?? "",
                         items: path.items.map((item) => ({
                           feedItemId: item.feedItemId,
                           sortOrder: item.sortOrder,

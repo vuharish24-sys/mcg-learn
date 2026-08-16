@@ -48,7 +48,7 @@ export default async function BenefitDetailPage({ params }: { params: Promise<{ 
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge className="gap-1 bg-amber-500 text-white shadow-sm">
-            <Gift className="size-3" /> Benefit
+            <Gift className="size-3" /> Scholarship
           </Badge>
           <Badge
             className={
@@ -79,7 +79,7 @@ export default async function BenefitDetailPage({ params }: { params: Promise<{ 
         </h2>
         <div className="space-y-3">
           {visibleCourses.map(({ feedItem, variantLabels }) => (
-            <Link key={feedItem.id} href={`/feed/${feedItem.id}/course`} className="block">
+            <Link key={feedItem.id} href={`/feed/${feedItem.id}/course`} prefetch={false} className="block">
               <Card className="transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="flex items-center justify-between gap-3 p-4">
                   <div className="min-w-0">

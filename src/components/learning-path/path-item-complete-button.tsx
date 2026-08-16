@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CertificateEarnedBanner } from "@/components/learning-path/certificate-earned-banner";
+import { RewardEarnedBanner } from "@/components/learning-path/reward-earned-banner";
 
 export function PathItemCompleteButton({
   learningPathId,
@@ -21,6 +21,8 @@ export function PathItemCompleteButton({
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [certificateJustIssued, setCertificateJustIssued] = useState(false);
+  const [badgeJustIssued, setBadgeJustIssued] = useState(false);
+  const [badgeIcon, setBadgeIcon] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   async function complete() {
@@ -39,6 +41,8 @@ export function PathItemCompleteButton({
     }
     setDone(true);
     setCertificateJustIssued(Boolean(payload.data?.certificateJustIssued));
+    setBadgeJustIssued(Boolean(payload.data?.badgeJustIssued));
+    setBadgeIcon(payload.data?.badgeIcon ?? null);
     router.refresh();
   }
 
@@ -48,7 +52,8 @@ export function PathItemCompleteButton({
         <p className="flex items-center gap-2 text-sm font-medium text-teal-700">
           <CheckCircle2 className="size-4" /> Lesson marked complete.
         </p>
-        {certificateJustIssued && <CertificateEarnedBanner advisingReady={advisingReady} />}
+        {certificateJustIssued && <RewardEarnedBanner kind="certificate" advisingReady={advisingReady} />}
+        {badgeJustIssued && <RewardEarnedBanner kind="badge" icon={badgeIcon} advisingReady={advisingReady} />}
       </div>
     );
   }

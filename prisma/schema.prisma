@@ -171,6 +171,12 @@ enum UserLearningStatus {
   COMPLETED
 }
 
+/** What a learner receives when they complete a LearningPath. */
+enum LearningPathRewardType {
+  CERTIFICATE
+  BADGE
+}
+
 model Role {
   id          String           @id @default(cuid())
   key         String           @unique
@@ -227,6 +233,7 @@ model User {
   referredBy    Referral?     @relation("ReferredUser")
   referralProfile ReferralProfile?
   certificates       Certificate[]
+  badges             Badge[]
   leadNotes          LeadNote[]
   learningProgress   UserLearningProgress[]
   pathItemCompletions UserPathItemCompletion[]
@@ -752,6 +759,28 @@ model Certificate {
   @@map("certificates")
 }
 
+/**
+ * Lightweight alternative to Certificate for LearningPaths with rewardType
+ * BADGE — no certificate number, PDF, or public verification page, just an
+ * icon shown on My Achievements.
+ */
+model Badge {
+  id             String       @id @default(cuid())
+  learnerId      String       @db.Uuid @map("learner_id")
+  learner        User         @relation(fields: [learnerId], references: [id])
+  learningPathId String?      @map("learning_path_id")
+  learningPath   LearningPath? @relation(fields: [learningPathId], references: [id])
+  pathTitle      String       @map("path_title")
+  icon           String       @default("🏅")
+  issuedAt       DateTime     @default(now()) @map("issued_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([learnerId, learningPathId])
+  @@index([learnerId])
+  @@index([learningPathId])
+  @@map("badges")
+}
+
 model LearningPath {
   id                     String                 @id @default(cuid())
   title                  String
@@ -768,11 +797,15 @@ model LearningPath {
   requiredQuiz           FeedItem?              @relation("RequiredQuizPath", fields: [requiredQuizFeedItemId], references: [id])
   quizPassPercentage     Int                    @default(60) @map("quiz_pass_percentage")
   certificateTemplate    String?                @map("certificate_template")
+  rewardType             LearningPathRewardType @default(CERTIFICATE) @map("reward_type")
+  /** Emoji shown on the earned badge — only meaningful when rewardType is BADGE. */
+  badgeIcon              String?                @map("badge_icon")
   items                  LearningPathItem[]
   progress               UserLearningProgress[]
   itemCompletions        UserPathItemCompletion[]
   quizAttempts           QuizAttempt[]
   certificates           Certificate[]
+  badges                 Badge[]
   referralCampaignCourses ReferralCampaignCourse[]
   commissionTransactions ReferralCommissionTransaction[]
   createdAt              DateTime               @default(now()) @map("created_at")

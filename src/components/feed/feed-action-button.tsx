@@ -30,7 +30,7 @@ export function FeedActionButton({
   }
 
   return (
-    <Link href={href} className={buttonVariants({ size: "sm" })}>
+    <Link href={href} prefetch={false} className={buttonVariants({ size: "sm" })}>
       {getFeedActionLabel(type)} {kind === "watch" ? <Play className="size-3" /> : <ExternalLink className="size-3" />}
     </Link>
   );

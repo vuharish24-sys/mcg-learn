@@ -1,16 +1,28 @@
 import Link from "next/link";
 import { Award, UserCircle } from "lucide-react";
 
-/** Shown whenever an action (quiz pass, marking an item complete) causes a new certificate to be issued. */
-export function CertificateEarnedBanner({ advisingReady }: { advisingReady: boolean }) {
+/** Shown whenever an action (quiz pass, marking an item complete) causes a new certificate or badge to be issued. */
+export function RewardEarnedBanner({
+  kind,
+  icon,
+  advisingReady,
+}: {
+  kind: "certificate" | "badge";
+  icon?: string | null;
+  advisingReady: boolean;
+}) {
+  const isBadge = kind === "badge";
+
   return (
     <div className="rounded-2xl border border-teal-200 bg-teal-50 p-6 dark:border-teal-900 dark:bg-teal-950/40">
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-violet-600 text-white">
-          <Award className="size-5" />
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-violet-600 text-lg text-white">
+          {isBadge ? icon || "🏅" : <Award className="size-5" />}
         </span>
         <div className="flex-1">
-          <p className="font-bold text-teal-900 dark:text-teal-200">You just earned a certificate!</p>
+          <p className="font-bold text-teal-900 dark:text-teal-200">
+            {isBadge ? "You just earned a badge!" : "You just earned a certificate!"}
+          </p>
           <p className="mt-1 text-sm text-teal-800/80 dark:text-teal-300/80">
             {advisingReady
               ? "A career officer will be in touch about your next steps."
@@ -21,7 +33,8 @@ export function CertificateEarnedBanner({ advisingReady }: { advisingReady: bool
               href="/my-achievements"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800"
             >
-              <Award className="size-4" /> View certificate
+              {isBadge ? <span>{icon || "🏅"}</span> : <Award className="size-4" />}
+              {isBadge ? "View badge" : "View certificate"}
             </Link>
             {!advisingReady && (
               <Link

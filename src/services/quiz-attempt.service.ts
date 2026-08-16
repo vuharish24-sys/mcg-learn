@@ -35,19 +35,20 @@ export const quizAttemptService = {
     const totalQuestions = gradedIndexes.length;
     const percentage = Math.round((score / totalQuestions) * 100);
 
+    const path = input.learningPathId
+      ? await prisma.learningPath.findUnique({
+          where: { id: input.learningPathId },
+          include: { items: true },
+        })
+      : null;
+
     let passThreshold = 60;
-    if (input.learningPathId) {
-      const path = await prisma.learningPath.findUnique({
-        where: { id: input.learningPathId },
-        include: { items: true },
+    if (path) {
+      const pathItem = path.items.find((item) => item.feedItemId === input.feedItemId);
+      passThreshold = resolveQuizPassPercentage({
+        itemPassPercentage: pathItem?.passPercentage,
+        pathQuizPassPercentage: path.quizPassPercentage,
       });
-      if (path) {
-        const pathItem = path.items.find((item) => item.feedItemId === input.feedItemId);
-        passThreshold = resolveQuizPassPercentage({
-          itemPassPercentage: pathItem?.passPercentage,
-          pathQuizPassPercentage: path.quizPassPercentage,
-        });
-      }
     }
 
     const passed = percentage >= passThreshold;
@@ -69,39 +70,64 @@ export const quizAttemptService = {
 
     let certificateJustIssued = false;
     let certificateNumber: string | null = null;
+    let badgeJustIssued = false;
+    let badgeIcon: string | null = null;
 
     if (passed && input.learningPathId) {
+      const learningPathId = input.learningPathId;
+      const rewardType = path?.rewardType ?? "CERTIFICATE";
+
       await prisma.userPathItemCompletion.upsert({
         where: {
           userId_learningPathId_feedItemId: {
             userId: input.userId,
-            learningPathId: input.learningPathId,
+            learningPathId,
             feedItemId: input.feedItemId,
           },
         },
         create: {
           userId: input.userId,
-          learningPathId: input.learningPathId,
+          learningPathId,
           feedItemId: input.feedItemId,
         },
         update: {},
       });
 
-      const certBefore = await prisma.certificate.findUnique({
-        where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId: input.learningPathId } },
-        select: { id: true },
-      });
+      const certBefore =
+        rewardType === "CERTIFICATE"
+          ? await prisma.certificate.findUnique({
+              where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId } },
+              select: { id: true },
+            })
+          : null;
+      const badgeBefore =
+        rewardType === "BADGE"
+          ? await prisma.badge.findUnique({
+              where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId } },
+              select: { id: true },
+            })
+          : null;
 
-      await learningPathService.recalculateProgress(input.userId, input.learningPathId);
+      await learningPathService.recalculateProgress(input.userId, learningPathId);
 
-      if (!certBefore) {
+      if (rewardType === "CERTIFICATE" && !certBefore) {
         const certAfter = await prisma.certificate.findUnique({
-          where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId: input.learningPathId } },
+          where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId } },
           select: { certificateNumber: true },
         });
         if (certAfter) {
           certificateJustIssued = true;
           certificateNumber = certAfter.certificateNumber;
+        }
+      }
+      if (rewardType === "BADGE" && !badgeBefore) {
+        const badgeAfter = await prisma.badge.findUnique({
+          where: { learnerId_learningPathId: { learnerId: input.userId, learningPathId } },
+          select: { icon: true },
+        });
+        if (badgeAfter) {
+          badgeJustIssued = true;
+          badgeIcon = badgeAfter.icon;
         }
       }
     }
@@ -124,6 +150,8 @@ export const quizAttemptService = {
       answerKey,
       certificateJustIssued,
       certificateNumber,
+      badgeJustIssued,
+      badgeIcon,
     };
   },
 

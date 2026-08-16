@@ -44,7 +44,7 @@ export function LearningPathCard({
   const previews = pathPreviewImages(path.items, 4);
 
   return (
-    <Link href={href} className="group block h-full w-full">
+    <Link href={href} prefetch={false} className="group block h-full w-full">
       <Card className="h-full w-full overflow-hidden border-0 shadow-md ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:ring-slate-800">
         <MediaCover
           src={cover}

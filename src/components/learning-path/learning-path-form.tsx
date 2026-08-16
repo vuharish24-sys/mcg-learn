@@ -31,6 +31,8 @@ export function LearningPathForm({
     requiredQuizFeedItemId: string;
     quizPassPercentage: string;
     certificateTemplate?: string;
+    rewardType?: string;
+    badgeIcon?: string;
     items: PathItem[];
   };
   endpoint: string;
@@ -46,6 +48,7 @@ export function LearningPathForm({
   const [requiredQuizFeedItemId, setRequiredQuizFeedItemId] = useState(
     initial?.requiredQuizFeedItemId ?? "",
   );
+  const [rewardType, setRewardType] = useState(initial?.rewardType ?? "CERTIFICATE");
 
   const quizzesInPath = items
     .map((item) => feedItems.find((feed) => feed.value === item.feedItemId && feed.type === "QUIZ"))
@@ -82,6 +85,8 @@ export function LearningPathForm({
       requiredQuizFeedItemId: requiredQuizFeedItemId || null,
       quizPassPercentage: Number(formData.get("quizPassPercentage") ?? 60),
       certificateTemplate: formData.get("certificateTemplate") || null,
+      rewardType,
+      badgeIcon: rewardType === "BADGE" ? formData.get("badgeIcon") || null : null,
       items: items
         .filter((item) => item.feedItemId)
         .map((item, index) => ({
@@ -188,7 +193,32 @@ export function LearningPathForm({
             <label className="block space-y-1.5"><span className="text-sm font-medium">Quiz pass %</span><Input name="quizPassPercentage" type="number" min={0} max={100} defaultValue={initial?.quizPassPercentage ?? "60"} className={fieldClassName} /></label>
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isFeatured" defaultChecked={initial?.isFeatured} /> Featured path</label>
-          <label className="block space-y-1.5"><span className="text-sm font-medium">Certificate template (optional)</span><Input name="certificateTemplate" defaultValue={initial?.certificateTemplate ?? ""} className={fieldClassName} /></label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">Reward on completion</span>
+              <select
+                name="rewardType"
+                value={rewardType}
+                onChange={(e) => setRewardType(e.target.value)}
+                className={fieldClassName}
+              >
+                <option value="CERTIFICATE">Certificate — formal, numbered, publicly verifiable</option>
+                <option value="BADGE">Badge — lightweight icon shown on My Achievements</option>
+              </select>
+            </label>
+            {rewardType === "BADGE" ? (
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium">Badge icon (emoji)</span>
+                <Input name="badgeIcon" maxLength={8} placeholder="🏅" defaultValue={initial?.badgeIcon ?? ""} className={fieldClassName} />
+              </label>
+            ) : (
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium">Certificate template (optional)</span>
+                <Input name="certificateTemplate" defaultValue={initial?.certificateTemplate ?? ""} className={fieldClassName} />
+              </label>
+            )}
+          </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between"><p className="font-semibold">Path items</p><Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="size-4" /> Add item</Button></div>

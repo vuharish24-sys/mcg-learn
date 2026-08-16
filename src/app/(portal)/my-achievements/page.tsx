@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Award, Download, ExternalLink, ShieldCheck } from "lucide-react";
+import { Download, ExternalLink, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { certificateService } from "@/services/certificate.service";
+import { badgeService } from "@/services/badge.service";
 import { appUrl } from "@/lib/env";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +11,10 @@ import { Badge } from "@/components/ui/badge";
 
 export default async function MyAchievementsPage() {
   const user = await requireUser();
-  const certificates = await certificateService.listAchievements(user.id);
+  const [certificates, badges] = await Promise.all([
+    certificateService.listAchievements(user.id),
+    badgeService.listAchievements(user.id),
+  ]);
 
   return (
     <div className="space-y-7">
@@ -57,14 +61,26 @@ export default async function MyAchievementsPage() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-bold">Badges</h2>
-        <Card className="border-dashed">
-          <CardContent className="flex items-center gap-4 p-8 text-slate-500">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-50 to-violet-50 text-teal-600 dark:from-teal-950 dark:to-violet-950 dark:text-teal-300">
-              <Award className="size-6" />
-            </span>
-            <p>Badges are coming soon. Complete learning paths to unlock certificates today.</p>
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {badges.map((badge) => (
+            <Card key={badge.id} className="transition duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+              <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
+                <span className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-violet-600 text-3xl shadow-lg shadow-teal-600/30">
+                  {badge.icon}
+                </span>
+                <p className="font-bold">{badge.pathTitle}</p>
+                <p className="text-xs text-slate-500">{formatDate(badge.issuedAt)}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {badges.length === 0 && (
+          <Card className="border-dashed">
+            <CardContent className="p-8 text-center text-slate-500">
+              Complete a badge-type learning path to earn your first badge.
+            </CardContent>
+          </Card>
+        )}
       </section>
 
       <p className="text-xs text-slate-400">Verification base URL: {appUrl()}/verify/[certificate-id]</p>

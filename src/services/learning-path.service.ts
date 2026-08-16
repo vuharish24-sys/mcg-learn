@@ -6,6 +6,8 @@ import { resolveQuizPassPercentage } from "@/lib/quiz-pass";
 import { certificateService } from "@/services/certificate.service";
 import { crmService } from "@/services/crm.service";
 
+const DEFAULT_BADGE_ICON = "🏅";
+
 const pathInclude = {
   items: {
     include: { feedItem: { include: { category: true } } },
@@ -182,16 +184,29 @@ export const learningPathService = {
       update: {},
     });
 
-    const certBefore = await prisma.certificate.findUnique({
-      where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
-      select: { id: true },
-    });
+    const certBefore =
+      path.rewardType === "CERTIFICATE"
+        ? await prisma.certificate.findUnique({
+            where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
+            select: { id: true },
+          })
+        : null;
+    const badgeBefore =
+      path.rewardType === "BADGE"
+        ? await prisma.badge.findUnique({
+            where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
+            select: { id: true },
+          })
+        : null;
 
     const progress = await this.recalculateProgress(userId, learningPathId);
 
     let certificateJustIssued = false;
     let certificateNumber: string | null = null;
-    if (!certBefore) {
+    let badgeJustIssued = false;
+    let badgeIcon: string | null = null;
+
+    if (path.rewardType === "CERTIFICATE" && !certBefore) {
       const certAfter = await prisma.certificate.findUnique({
         where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
         select: { certificateNumber: true },
@@ -201,8 +216,18 @@ export const learningPathService = {
         certificateNumber = certAfter.certificateNumber;
       }
     }
+    if (path.rewardType === "BADGE" && !badgeBefore) {
+      const badgeAfter = await prisma.badge.findUnique({
+        where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
+        select: { icon: true },
+      });
+      if (badgeAfter) {
+        badgeJustIssued = true;
+        badgeIcon = badgeAfter.icon;
+      }
+    }
 
-    return { progress, certificateJustIssued, certificateNumber };
+    return { progress, certificateJustIssued, certificateNumber, badgeJustIssued, badgeIcon };
   },
 
   async isItemComplete(
@@ -301,10 +326,42 @@ export const learningPathService = {
     });
 
     if (isComplete) {
-      await this.issueCertificateIfNeeded(userId, learningPathId, path.title);
+      if (path.rewardType === "BADGE") {
+        await this.issueBadgeIfNeeded(userId, learningPathId, path.title, path.badgeIcon);
+      } else {
+        await this.issueCertificateIfNeeded(userId, learningPathId, path.title);
+      }
     }
 
     return progress;
+  },
+
+  async issueBadgeIfNeeded(userId: string, learningPathId: string, pathTitle: string, badgeIcon: string | null) {
+    const existing = await prisma.badge.findUnique({
+      where: { learnerId_learningPathId: { learnerId: userId, learningPathId } },
+    });
+    if (existing) return existing;
+
+    const learner = await prisma.user.findUnique({ where: { id: userId } });
+    if (!learner) return null;
+
+    const badge = await prisma.badge.create({
+      data: {
+        learnerId: userId,
+        learningPathId,
+        pathTitle,
+        icon: badgeIcon || DEFAULT_BADGE_ICON,
+      },
+    });
+
+    // Best-effort CRM handoff signal — must never block badge issuance.
+    if (learner.email) {
+      crmService.flagLearnerCertified(learner.email, pathTitle).catch((error) => {
+        console.error("flagLearnerCertified failed", error);
+      });
+    }
+
+    return badge;
   },
 
   async issueCertificateIfNeeded(userId: string, learningPathId: string, pathTitle: string) {
