@@ -68,6 +68,38 @@ export const aiProviderUpdateSchema = z.object({
   priority: z.coerce.number().int().min(0).max(1000).optional(),
 });
 
+export const contentSourceCreateSchema = z
+  .object({
+    platform: z.enum(["YOUTUBE", "INSTAGRAM", "RSS"]),
+    name: z.string().trim().min(1).max(120),
+    // Channel ID/@handle for YouTube, IG Business account user ID for Instagram, feed URL for RSS.
+    handle: z.string().trim().min(1).max(500),
+    apiKey: z.string().trim().max(500).optional(),
+    isActive: z.coerce.boolean().default(true),
+  })
+  .refine((data) => data.platform === "RSS" || Boolean(data.apiKey?.trim()), {
+    message: "An API key / access token is required for YouTube and Instagram sources",
+    path: ["apiKey"],
+  });
+
+export const contentSourceUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  handle: z.string().trim().min(1).max(500).optional(),
+  apiKey: z.string().trim().max(500).optional(),
+  isActive: z.coerce.boolean().optional(),
+});
+
+export const contentSourceImportSchema = z
+  .object({
+    categoryId: z.string().min(1),
+    target: z.enum(["FEED", "LEARNING_PATH"]),
+    learningPathId: z.string().min(1).optional(),
+  })
+  .refine((data) => data.target !== "LEARNING_PATH" || Boolean(data.learningPathId), {
+    message: "learningPathId is required when target is LEARNING_PATH",
+    path: ["learningPathId"],
+  });
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   email: z.union([z.email(), z.literal(""), z.null()]).optional(),

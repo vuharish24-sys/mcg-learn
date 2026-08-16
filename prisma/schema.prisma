@@ -177,6 +177,18 @@ enum LearningPathRewardType {
   BADGE
 }
 
+enum ContentSourcePlatform {
+  YOUTUBE
+  INSTAGRAM
+  RSS
+}
+
+enum ContentSourceItemStatus {
+  NEW
+  IMPORTED
+  DISMISSED
+}
+
 model Role {
   id          String           @id @default(cuid())
   key         String           @unique
@@ -305,6 +317,8 @@ model FeedItem {
   campaignFeedLinks    CampaignFeedLink[]
   /** COURSE only: benefits (coupons/scholarships/perks) mapped onto this course's variants. */
   courseVariantBenefits CourseVariantBenefit[]
+  /** Content-source imports (Admin > Content Sources) that were turned into this feed item. */
+  sourceItems           ContentSourceItem[]
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
@@ -327,6 +341,57 @@ model ContentSeries {
   createdAt DateTime   @default(now()) @map("created_at")
 
   @@map("content_series")
+}
+
+/**
+ * An admin-configured social/blog account to poll for new content
+ * (Admin > Content Sources > "Fetch latest"). `handle` means a different
+ * thing per platform: YouTube channel ID or @handle, Instagram Business
+ * account user ID, or a plain RSS/Atom feed URL. `encryptedApiKey` holds the
+ * YouTube API key or Instagram long-lived access token (AES, same as
+ * AiProviderConfig) — null for RSS, which needs no credential.
+ */
+model ContentSource {
+  id                String                @id @default(cuid())
+  name              String
+  platform          ContentSourcePlatform
+  handle            String
+  encryptedApiKey   String?               @map("encrypted_api_key")
+  isActive          Boolean               @default(true) @map("is_active")
+  lastFetchedAt     DateTime?             @map("last_fetched_at")
+  lastError         String?               @map("last_error")
+  items             ContentSourceItem[]
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  @@map("content_sources")
+}
+
+/**
+ * One post/video/article discovered from a ContentSource's "Fetch latest"
+ * run, staged for admin review before it becomes real feed content — never
+ * auto-published. Deduplicated per source by the platform's own item id
+ * (`externalId`), so re-fetching only surfaces genuinely new items.
+ */
+model ContentSourceItem {
+  id                  String                   @id @default(cuid())
+  sourceId            String                   @map("source_id")
+  source              ContentSource            @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId          String                   @map("external_id")
+  title               String
+  description         String?
+  thumbnailUrl        String?                  @map("thumbnail_url")
+  externalUrl         String                   @map("external_url")
+  publishedAt         DateTime?                @map("published_at")
+  status              ContentSourceItemStatus  @default(NEW)
+  importedFeedItemId  String?                  @map("imported_feed_item_id")
+  importedFeedItem    FeedItem?                @relation(fields: [importedFeedItemId], references: [id], onDelete: SetNull)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+
+  @@unique([sourceId, externalId])
+  @@index([status])
+  @@index([importedFeedItemId])
+  @@map("content_source_items")
 }
 
 model Lead {

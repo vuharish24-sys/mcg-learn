@@ -1,8 +1,8 @@
 # MCG Learn — Session Changelog
 
-**Date:** 2026-08-13 (updated — see §11–15 for this update)
-**Period:** 2026-08-01 → 2026-08-13
-**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system
+**Date:** 2026-08-16 (updated — see §16 for this update)
+**Period:** 2026-08-01 → 2026-08-16
+**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system
 **Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI
 
 ---
@@ -222,3 +222,56 @@ New/updated since §10:
 - **All 10 real courses are still `DRAFT`** — a live learner today sees no course, job offer, or benefit card yet. This is a content/publish-state decision, not a missing feature.
 - Feed-card spacing intervals (ads every 4, learning paths every 5, benefits every 6) are hardcoded, not admin-configurable.
 - A variant-id fallback inconsistency exists between the course detail page's read-time default and the admin form's default, but only for a course that predates the variant `id` field *and* has never been re-saved through the admin form since — doesn't affect any course currently in the database.
+
+---
+
+## 16. Feed hero card, badge rewards, and platform-role clarification (2026-08-16)
+
+### Product context established this update
+
+Reviewed the real MCG marketing site (`MCG-Website/index.html`, a separate project) to ground upcoming feed/content decisions in the actual business. Clarified with the user that MCG-Learn's role is **free content + course info + ads**, not paid-program delivery — so the marketing site's five learning "shapes" and named program bundles were deliberately *not* built out as full curricula here; that earlier direction was walked back once the actual scope was confirmed.
+
+### Certificate vs. badge rewards for learning paths
+
+Previously every completed learning path issued a formal `Certificate` (numbered, PDF, publicly verifiable) — the only option. Learning paths can now be configured to issue a lightweight **Badge** instead, for lower-stakes content that doesn't warrant a certificate.
+
+- **Schema**: `LearningPathRewardType` enum (`CERTIFICATE` | `BADGE`) on `LearningPath`, plus `badgeIcon` (emoji); new `Badge` model mirroring `Certificate` minus the certificate-number/PDF/verify machinery — [prisma/schema.prisma](../prisma/schema.prisma), migration `20260815150000_learning_path_badges`
+- **Issuance logic**: both existing completion paths — "mark item complete" ([learning-path.service.ts](../src/services/learning-path.service.ts)) and "quiz pass" ([quiz-attempt.service.ts](../src/services/quiz-attempt.service.ts)) — now branch on `path.rewardType` to call `issueCertificateIfNeeded` or the new `issueBadgeIfNeeded`, each independently doing a before/after existence check to detect "just issued" for the celebratory UI. The CRM handoff (`crmService.flagLearnerCertified`) still fires for both reward types, since it's a business-critical sales-follow-up trigger, not tied to the certificate concept specifically.
+- **UI**: `CertificateEarnedBanner` generalized into [`RewardEarnedBanner`](../src/components/learning-path/reward-earned-banner.tsx) (`kind: "certificate" | "badge"`), wired into both the quiz-result card and the "mark complete" button; [My Achievements](../src/app/(portal)/my-achievements/page.tsx) now shows a "Badges" section of medallion cards alongside "Certificates"; the admin learning-path form gained a "Reward on completion" selector with a conditional badge-icon (emoji) input in place of the certificate-template field
+
+Verified live: created a throwaway badge-type learning path, completed it in a real logged-in session, confirmed the badge banner rendered and the badge appeared on My Achievements; test data cleaned up after.
+
+### Feed hero card + category navigation
+
+Addressed a UX gap: a learner who logs in and takes no action lands on an undifferentiated feed with no clear first move.
+
+- New [`FeedHeroCard`](../src/components/feed/feed-hero-card.tsx): a full-width banner pinned above the regular feed stream, showing (in priority order) the learner's in-progress path ("Continue learning"), the top active scholarship, or a "Start here" orientation prompt for a brand-new learner — pulled from data the feed already computed, just promoted out of the interleaved stream instead of being buried
+- **Category quick-nav chips** (Learning Paths / Courses / Job Board / Quizzes / Webinars) added above the feed for direct browsing by content type
+- **Filter bar modernized**: removed the redundant "type" dropdown (now covered by the category chips), restyled the remaining search/category/sort controls with a consistent select treatment and a gradient "Apply" button
+- "Benefit" relabeled to **"Scholarship"** in the benefit card badge, matching how the offering is actually described to learners
+
+All in [feed/page.tsx](../src/app/(portal)/feed/page.tsx). Verified live: hero card renders correctly for a learner with an active scholarship, category chips navigate correctly, no console errors.
+
+### Bug fixes
+
+| Issue | Cause | Fix |
+|---|---|---|
+| "Uncaught Error: Connection closed" in the browser console on the live site | Next.js's own `<Link>` prefetch machinery aborting a request when a card scrolls out of view before the prefetch completes — cosmetic, not a functional break, but noisy | Added `prefetch={false}` to card-wrapping `<Link>`s in `FeedActionButton`, `LearningPathCard`, `BenefitCard`, and the benefit detail page |
+| AI article generation failing with `Gemini returned 404` | Hardcoded model name (`gemini-2.0-flash`, later `gemini-2.5-flash`) had been deprecated/removed from the API | Queried Google's live `models.list` endpoint with the actual stored API key to find a currently valid model; updated to `gemini-3.5-flash` in [ai-content.ts](../src/lib/ai-content.ts). Verified by generating 2 real articles end-to-end. |
+
+### Testing performed without code changes
+
+- Full end-to-end pass on the job board and partner-referred-candidate flow (partner-owned vs. global job visibility, candidate gating, 7-day vs. indefinite access) — no bugs found, matches §11's original verification
+- Confirmed no automated-test gap has changed (still none — carried forward from §10/§15)
+
+### Deployment
+
+Committed as `c7b785d` and pushed to `main`. Confirmed live on Netlify by matching the production site's content-hashed JS bundle filenames against the local build immediately preceding the push, then visually confirming the hero card, category chips, modernized filter bar, and badges section in a real logged-in session with zero console errors.
+
+---
+
+## 17. Known gaps (current, 2026-08-16)
+
+Carried forward from §15 (still true): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented, course fee is free text, all 10 real courses still `DRAFT`, feed-card spacing intervals hardcoded.
+
+No new gaps identified this update.
