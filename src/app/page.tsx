@@ -2,56 +2,59 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  Award,
   BookOpen,
-  CheckCircle2,
+  Briefcase,
   GraduationCap,
+  Gift,
   HeartPulse,
-  Network,
-  Route,
   Users,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { parseFeedContent } from "@/lib/feed-actions";
+import { benefitService } from "@/services/benefit.service";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { MediaCover } from "@/components/ui/media-cover";
 import { trackVisit } from "@/services/funnel.service";
 import { getBrandingLogoUrl } from "@/lib/branding";
 
 export const metadata: Metadata = {
-  title: "Build a Medical Coding Career",
+  title: "Explore Medical Coding — Free to Start",
   description:
-    "Structured learning paths, verified certificates, and one-on-one career guidance to help you become a certified medical coder — from Medical Coding Global.",
+    "Free articles, videos, and quizzes to explore medical coding, plus real course info, live scholarships, and career guidance — from Medical Coding Global.",
 };
 
 const benefits = [
   {
-    icon: Route,
-    title: "Structured learning paths",
-    description: "Step-by-step curricula that take you from the basics to job-ready, with required quizzes to confirm you've actually learned it.",
+    icon: BookOpen,
+    title: "Free learning content",
+    description: "Bite-sized articles, videos, and quizzes on medical coding — no cost, no experience needed, at your own pace.",
   },
   {
-    icon: Award,
-    title: "Verified certificates",
-    description: "Earn a certificate with a public, shareable verification link the moment you complete a path — proof employers can check.",
+    icon: GraduationCap,
+    title: "Real courses & live scholarships",
+    description: "See MCG's expert-led Professional and Specialist programs, with current discounts and scholarships shown up front.",
+  },
+  {
+    icon: Briefcase,
+    title: "Job board",
+    description: "Browse medical coding job openings sourced from MCG's placement partners.",
   },
   {
     icon: Users,
-    title: "One-on-one career guidance",
+    title: "Career guidance",
     description: "Get matched with a career officer for personalized advice on certifications, specialties, and your job search.",
-  },
-  {
-    icon: Network,
-    title: "Earn by referring others",
-    description: "Join the referral program and earn rewards for introducing other future coders to Medical Coding Global.",
   },
 ];
 
 const steps = [
   { title: "Create your free account", description: "Sign up in under a minute — no payment required to get started." },
-  { title: "Work through a learning path", description: "Read, watch, and practice at your own pace, on any device." },
-  { title: "Pass the quiz, earn your certificate", description: "Prove what you've learned and get a verifiable credential instantly." },
-  { title: "Get career guidance", description: "Talk to a career officer about certification, specialties, and job placement." },
+  { title: "Explore free content", description: "Browse articles, reels, and quizzes to learn the basics and see if medical coding is right for you." },
+  { title: "Discover real programs", description: "Check out course tiers, live scholarships, and open jobs when you're ready to go deeper." },
+  { title: "Get career guidance", description: "Talk to a career officer about certification paths and your next step." },
 ];
 
 export default async function HomePage() {
@@ -59,7 +62,24 @@ export default async function HomePage() {
   if (user) {
     redirect(user.role.key === "LEARNER" || user.role.key === "TRAINER" ? "/feed" : "/dashboard");
   }
-  const [, logoUrl] = await Promise.all([trackVisit("landing"), getBrandingLogoUrl()]);
+  const [, logoUrl, courseItems] = await Promise.all([
+    trackVisit("landing"),
+    getBrandingLogoUrl(),
+    prisma.feedItem.findMany({
+      where: { type: "COURSE", status: "PUBLISHED" },
+      orderBy: { priority: "desc" },
+      take: 3,
+    }),
+  ]);
+
+  const allVariantIds = courseItems.flatMap((item) => parseFeedContent(item.content).course?.variants.map((v) => v.id) ?? []);
+  const benefitsByVariant = allVariantIds.length > 0 ? await benefitService.getActiveForVariantIds(allVariantIds) : new Map();
+  const courses = courseItems.map((item) => {
+    const { course } = parseFeedContent(item.content);
+    const firstFee = course?.variants.find((v) => v.fee)?.fee ?? null;
+    const hasOffer = course?.variants.some((v) => (benefitsByVariant.get(v.id)?.length ?? 0) > 0) ?? false;
+    return { item, fee: firstFee, hasOffer };
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-teal-50 via-white to-white dark:from-slate-950 dark:via-slate-950 dark:to-slate-950">
@@ -88,16 +108,16 @@ export default async function HomePage() {
             Medical Coding Global
           </p>
           <h1 className="text-4xl font-bold leading-tight text-slate-900 sm:text-6xl dark:text-white">
-            Build a career that matters, one learning path at a time.
+            Explore medical coding. Free to start.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-600 dark:text-slate-300">
-            Learn medical coding through structured, self-paced learning paths, earn a
-            verified certificate, and get one-on-one career guidance to launch your future
-            — no experience needed.
+            Learn the fundamentals through free articles, videos, and quizzes — then see
+            our expert-led courses, current scholarships, and open coding jobs when
+            you&apos;re ready to go further.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link href="/register" className={buttonVariants({ variant: "gradient", size: "lg" })}>
-              Start learning for free
+              Explore for free
             </Link>
             <Link href="/login" className={buttonVariants({ variant: "outline", size: "lg" })}>
               I already have an account
@@ -140,17 +160,52 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {courses.length > 0 && (
+          <section className="mx-auto max-w-6xl px-6 pb-20">
+            <div className="mb-8 text-center">
+              <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Real programs, when you&apos;re ready</h2>
+              <p className="mx-auto mt-3 max-w-2xl text-slate-500">
+                Expert-led courses with live scholarships and current pricing — sign in to see full
+                details and enroll.
+              </p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-3">
+              {courses.map(({ item, fee, hasOffer }) => (
+                <Card key={item.id} className="overflow-hidden border-0 shadow-md">
+                  <MediaCover src={item.thumbnailUrl} alt={item.title} className="h-32">
+                    {hasOffer && (
+                      <Badge className="absolute right-2 top-2 gap-1 bg-amber-500 text-white shadow-sm">
+                        <Gift className="size-3" /> Scholarship
+                      </Badge>
+                    )}
+                  </MediaCover>
+                  <CardContent className="p-5">
+                    <h3 className="font-bold">{item.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.description}</p>
+                    {fee && <p className="mt-3 text-sm font-semibold text-teal-700 dark:text-teal-400">From {fee}</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Link href="/register" className={buttonVariants({ variant: "outline" })}>
+                Create a free account to see full course details
+              </Link>
+            </div>
+          </section>
+        )}
+
         <section className="mx-auto max-w-4xl px-6 py-20 text-center">
           <div className="flex items-center justify-center gap-2 text-teal-700 dark:text-teal-400">
             <BookOpen className="size-5" />
             <GraduationCap className="size-5" />
-            <CheckCircle2 className="size-5" />
+            <Briefcase className="size-5" />
           </div>
           <h2 className="mt-4 text-3xl font-bold text-slate-900 dark:text-white">
-            Your medical coding career starts today.
+            Ready to see where medical coding could take you?
           </h2>
           <p className="mt-4 text-slate-600 dark:text-slate-300">
-            Free to join. No experience required.
+            Free to explore. Real programs when you&apos;re ready.
           </p>
           <Link href="/register" className={`${buttonVariants({ variant: "gradient", size: "lg" })} mt-8`}>
             Create your free account
