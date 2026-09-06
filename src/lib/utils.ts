@@ -14,6 +14,17 @@ export function formatDate(value: Date | string | null | undefined) {
   }).format(new Date(value));
 }
 
+export function formatDateTime(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export function enumLabel(value: string) {
   return value
     .toLowerCase()

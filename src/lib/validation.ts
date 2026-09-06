@@ -89,6 +89,166 @@ export const contentSourceUpdateSchema = z.object({
   isActive: z.coerce.boolean().optional(),
 });
 
+export const appointmentSlotCreateSchema = z
+  .object({
+    startsAt: z.coerce.date(),
+    endsAt: z.coerce.date(),
+    meetingUrl: z.union([z.url(), z.literal(""), z.null()]).optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .refine((data) => data.endsAt > data.startsAt, {
+    message: "End time must be after start time",
+    path: ["endsAt"],
+  })
+  .refine((data) => data.startsAt.getTime() > Date.now(), {
+    message: "Start time must be in the future",
+    path: ["startsAt"],
+  });
+
+export const appointmentBookSchema = z.object({
+  learnerNotes: z.string().trim().max(500).optional(),
+});
+
+const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:mm format");
+
+export const availabilityRuleCreateSchema = z
+  .object({
+    daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1, "Pick at least one day"),
+    startTime: timeOfDay,
+    endTime: timeOfDay,
+    slotDurationMinutes: z.coerce.number().int().min(5).max(240),
+    meetingUrl: z.union([z.url(), z.literal(""), z.null()]).optional(),
+    notes: z.string().trim().max(500).optional(),
+    generateWeeksAhead: z.coerce.number().int().min(1).max(12).default(4),
+  })
+  .refine((data) => data.endTime > data.startTime, {
+    message: "End time must be after start time",
+    path: ["endTime"],
+  });
+
+export const availabilityRuleGenerateSchema = z.object({
+  weeksAhead: z.coerce.number().int().min(1).max(12).default(4),
+});
+
+export const purchaseCheckoutSchema = z.object({
+  purchasableType: z.enum(["LEARNING_PATH", "BUNDLE"]),
+  id: z.string().min(1),
+});
+
+export const purchaseVerifySchema = z.object({
+  razorpayOrderId: z.string().min(1),
+  razorpayPaymentId: z.string().min(1),
+  razorpaySignature: z.string().min(1),
+});
+
+export const bundleCreateSchema = z.object({
+  title: z.string().trim().min(1).max(150),
+  slug: z.string().trim().min(1).max(150).regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only"),
+  description: z.string().trim().min(1).max(2000),
+  priceInPaise: z.coerce.number().int().min(100),
+  isActive: z.coerce.boolean().default(true),
+  learningPathIds: z.array(z.string().min(1)).min(2, "A bundle needs at least 2 learning paths"),
+});
+
+export const bundleUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(150).optional(),
+  description: z.string().trim().min(1).max(2000).optional(),
+  priceInPaise: z.coerce.number().int().min(100).optional(),
+  isActive: z.coerce.boolean().optional(),
+  learningPathIds: z.array(z.string().min(1)).min(2).optional(),
+});
+
+const compensationType = z.enum(["HOURLY", "FLAT_PER_SESSION", "FLAT_PER_DELIVERABLE", "PER_STUDENT_USE"]);
+
+export const courseModuleCreateSchema = z.object({
+  feedItemId: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).optional(),
+  contentUrl: z.union([z.url(), z.literal(""), z.null()]).optional(),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const courseModuleUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  contentUrl: z.union([z.url(), z.literal(""), z.null()]).optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+});
+
+export const trainerAssignmentCreateSchema = z.object({
+  trainerId: z.string().min(1),
+  courseModuleId: z.string().min(1),
+  compensationType,
+  rateAmountPaise: z.coerce.number().int().min(1),
+});
+
+export const trainerProposalCreateSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  description: z.string().trim().min(10).max(3000),
+  targetCourseId: z.string().min(1).nullable().optional(),
+  proposedCompensationType: compensationType,
+  proposedRateAmountPaise: z.coerce.number().int().min(1),
+});
+
+export const trainerProposalDecisionSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("APPROVED"),
+    adminNotes: z.string().trim().max(1000).optional(),
+    targetCourseId: z.string().min(1),
+    finalCompensationType: compensationType,
+    finalRateAmountPaise: z.coerce.number().int().min(1),
+  }),
+  z.object({
+    status: z.enum(["REJECTED", "NEEDS_REVISION"]),
+    adminNotes: z.string().trim().max(1000).optional(),
+  }),
+]);
+
+export const moduleTeachRequestCreateSchema = z.object({
+  courseModuleId: z.string().min(1),
+  proposedCompensationType: compensationType,
+  proposedRateAmountPaise: z.coerce.number().int().min(1),
+});
+
+export const teachRequestDecisionSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("APPROVED"),
+    finalCompensationType: compensationType,
+    finalRateAmountPaise: z.coerce.number().int().min(1),
+  }),
+  z.object({ status: z.literal("REJECTED") }),
+]);
+
+export const classSessionCreateSchema = z.object({
+  trainerAssignmentId: z.string().min(1),
+  scheduledAt: z.coerce.date(),
+  durationMinutes: z.coerce.number().int().min(5).max(480),
+  meetingUrl: z.union([z.url(), z.literal(""), z.null()]).optional(),
+  notes: z.string().trim().max(500).optional(),
+  attendeeEmails: z.array(z.email()).min(1, "Add at least one attendee"),
+});
+
+export const deliverableCreateSchema = z.object({
+  trainerAssignmentId: z.string().min(1),
+  title: z.string().trim().min(3).max(200),
+  description: z.string().trim().max(2000).optional(),
+  fileUrl: z.union([z.url(), z.literal(""), z.null()]).optional(),
+});
+
+export const deliverableDecisionSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "NEEDS_REVISION"]),
+  adminNotes: z.string().trim().max(1000).optional(),
+});
+
+export const payoutMarkPaidSchema = z.object({
+  paymentReference: z.string().trim().max(200).optional(),
+});
+
+export const courseEnrollmentCreateSchema = z.object({
+  userEmail: z.email(),
+  feedItemId: z.string().min(1),
+});
+
 export const contentSourceImportSchema = z
   .object({
     categoryId: z.string().min(1),
@@ -194,6 +354,7 @@ export const learningPathSchema = z.object({
   certificateTemplate: z.string().trim().max(200).nullable().optional(),
   rewardType: z.enum(["CERTIFICATE", "BADGE"]).default("CERTIFICATE"),
   badgeIcon: z.string().trim().max(16).nullable().optional(),
+  priceInPaise: z.coerce.number().int().min(100).nullable().optional(),
   items: z.array(learningPathItemSchema).optional(),
 });
 

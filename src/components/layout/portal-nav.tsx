@@ -6,12 +6,18 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   Award,
   BookOpen,
+  CalendarClock,
+  CalendarDays,
   GraduationCap,
   HeartPulse,
   LayoutDashboard,
   LogOut,
   Megaphone,
+  ClipboardCheck,
   Network,
+  Package,
+  Presentation,
+  Receipt,
   Route,
   Settings,
   Trophy,
@@ -51,10 +57,17 @@ export function PortalNav({
     { href: "/profile", label: "Profile", icon: UserCircle, roles: [] },
     { href: "/my-learning", label: "My Learning", icon: BookOpen, roles: ["LEARNER"] },
     { href: "/learning-paths", label: "Learning Paths", icon: Route, roles: ["LEARNER", "ADMIN"] },
+    { href: "/bundles", label: "Bundles", icon: Package, roles: ["LEARNER", "ADMIN"] },
+    { href: "/my-purchases", label: "My Purchases", icon: Receipt, roles: ["LEARNER"] },
     { href: "/feed", label: "Learning Feed", icon: BookOpen, roles: [] },
+    { href: "/sessions", label: "Sessions", icon: CalendarDays, roles: [] },
+    { href: "/appointments", label: "Appointments", icon: CalendarClock, roles: [] },
+    { href: "/my-availability", label: "My Availability", icon: CalendarClock, roles: ["CAREER_OFFICER", "TRAINER"] },
     { href: "/my-achievements", label: "Achievements", icon: Trophy, roles: ["LEARNER"] },
     { href: "/crm", label: "CRM", icon: Users, roles: ["ADMIN", "CAREER_OFFICER"] },
     { href: "/trainers", label: "Trainer Network", icon: GraduationCap, roles: ["ADMIN", "TRAINER", "CAREER_OFFICER"] },
+    { href: "/trainer-portal", label: "Trainer Portal", icon: Presentation, roles: ["TRAINER"] },
+    { href: "/my-sessions", label: "My Sessions", icon: ClipboardCheck, roles: [] },
     { href: referralProgramJoined ? "/referrals" : "/referrals/join", label: referralProgramJoined ? "My Referrals" : "Join Referral Program", icon: Network, roles: [] },
     { href: "/referral-campaigns", label: "Campaigns", icon: Megaphone, roles: [] },
     { href: "/certificates", label: "Certificates", icon: Award, roles: ["ADMIN", "LEARNER"] },
@@ -78,7 +91,7 @@ export function PortalNav({
           )}
           MCG Learn
         </Link>
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
           {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);
             return (

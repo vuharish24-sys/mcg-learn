@@ -46,7 +46,7 @@ export function getFeedActionLabel(type: FeedType): string {
     case "PDF":
       return "Open PDF";
     case "WEBINAR":
-      return "Register webinar";
+      return "Register";
     case "CAREER_TIP":
       return "Book career guidance";
     case "YOUTUBE":
@@ -161,10 +161,22 @@ export type CourseContent = {
   variants: CourseVariant[];
 };
 
+export type SessionType = "FREE_SESSION" | "WEBINAR" | "CLASS";
+
+export const SESSION_TYPE_LABEL: Record<SessionType, string> = {
+  FREE_SESSION: "Free Session",
+  WEBINAR: "Webinar",
+  CLASS: "Class",
+};
+
 export type FeedContent = {
   questions?: QuizQuestion[];
   webinarAt?: string;
   location?: string;
+  /** WEBINAR feed items only. Defaults to "WEBINAR" for content saved before this field existed. */
+  sessionType?: SessionType;
+  /** WEBINAR feed items only — the actual join link (Zoom/Meet/etc.), admin-provided. */
+  meetingUrl?: string;
   job?: JobPostingContent;
   course?: CourseContent;
 };
@@ -189,10 +201,15 @@ export function parseFeedContent(value: unknown): FeedContent {
     }
   }
 
+  const sessionType: SessionType =
+    record.sessionType === "FREE_SESSION" || record.sessionType === "CLASS" ? record.sessionType : "WEBINAR";
+
   return {
     questions: questions.length > 0 ? questions : undefined,
     webinarAt: typeof record.webinarAt === "string" ? record.webinarAt : undefined,
     location: typeof record.location === "string" ? record.location : undefined,
+    sessionType,
+    meetingUrl: typeof record.meetingUrl === "string" ? record.meetingUrl : undefined,
     job: parseJobPostingContent(record),
     course: parseCourseContent(record),
   };

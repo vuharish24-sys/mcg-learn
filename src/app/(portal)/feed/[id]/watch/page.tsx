@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { enumLabel } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
+import { purchaseService } from "@/services/purchase.service";
 import { InstagramEmbed } from "@/components/feed/instagram-embed";
 import { YouTubeEmbed } from "@/components/feed/youtube-embed";
 import { PathItemCompleteButton } from "@/components/learning-path/path-item-complete-button";
@@ -31,6 +32,7 @@ export default async function FeedWatchPage({
   const path = learningPathId
     ? await prisma.learningPath.findUnique({ where: { id: learningPathId } })
     : null;
+  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
 
   const alreadyInPath =
     learningPathId

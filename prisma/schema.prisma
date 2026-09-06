@@ -189,6 +189,11 @@ enum ContentSourceItemStatus {
   DISMISSED
 }
 
+enum AppointmentStatus {
+  BOOKED
+  CANCELLED
+}
+
 model Role {
   id          String           @id @default(cuid())
   key         String           @unique
@@ -258,6 +263,14 @@ model User {
   campaignTermsAccepted  ReferralCampaignParticipant[]   @relation("CampaignTermsAcceptedBy")
   paymentProofsUploaded  ReferralPaymentAttachment[]     @relation("PaymentProofUploadedBy")
   campaignAuditEvents    ReferralCampaignAuditLog[]      @relation("CampaignAuditActor")
+  hostedAppointmentSlots AppointmentSlot[]               @relation("AppointmentSlotHost")
+  appointmentsBooked     Appointment[]                   @relation("AppointmentLearner")
+  availabilityRules      AvailabilityRule[]              @relation("AvailabilityRuleHost")
+  purchases              Purchase[]
+  classSessionAttendances ClassSessionAttendance[]
+  moduleCompletions      UserModuleCompletion[]
+  contentUsageEvents     ContentUsageEvent[]
+  courseEnrollments      CourseEnrollment[]
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
@@ -319,6 +332,10 @@ model FeedItem {
   courseVariantBenefits CourseVariantBenefit[]
   /** Content-source imports (Admin > Content Sources) that were turned into this feed item. */
   sourceItems           ContentSourceItem[]
+  /** COURSE only: content-structure modules trainers can be assigned to. */
+  courseModules         CourseModule[]       @relation("CourseModules")
+  trainerProposalsTargeting TrainerProposal[] @relation("ProposalTargetCourse")
+  enrollments           CourseEnrollment[]
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
@@ -394,6 +411,70 @@ model ContentSourceItem {
   @@map("content_source_items")
 }
 
+/**
+ * A free time window a Career Officer or Trainer has opened for a 1:1
+ * appointment. Available = no linked Appointment yet. Once booked, the slot
+ * stays permanently tied to that Appointment (even if later cancelled) —
+ * the host opens a fresh slot to offer that time again rather than
+ * reopening a used one, keeping booking a single atomic create with no
+ * separate "release" step to get wrong.
+ */
+model AppointmentSlot {
+  id          String       @id @default(cuid())
+  hostId      String       @map("host_id") @db.Uuid
+  host        User         @relation("AppointmentSlotHost", fields: [hostId], references: [id])
+  startsAt    DateTime     @map("starts_at")
+  endsAt      DateTime     @map("ends_at")
+  meetingUrl  String?      @map("meeting_url")
+  notes       String?
+  appointment Appointment?
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@index([hostId, startsAt])
+  @@index([startsAt])
+  @@map("appointment_slots")
+}
+
+/**
+ * A host's standing weekly pattern (e.g. "Mon/Wed/Fri, 4-6pm, 30-min slots").
+ * Saving one immediately materializes real AppointmentSlot rows for the next
+ * few weeks (see appointmentService.generateSlotsFromRule) — booking itself
+ * still only ever operates on real AppointmentSlot rows, so this is purely a
+ * bulk slot-creation convenience, not a new runtime concept.
+ */
+model AvailabilityRule {
+  id                  String   @id @default(cuid())
+  hostId              String   @map("host_id") @db.Uuid
+  host                User     @relation("AvailabilityRuleHost", fields: [hostId], references: [id])
+  /** 0 = Sunday .. 6 = Saturday. */
+  daysOfWeek          Int[]    @map("days_of_week")
+  startTime           String   @map("start_time")
+  endTime             String   @map("end_time")
+  slotDurationMinutes Int      @map("slot_duration_minutes")
+  meetingUrl          String?  @map("meeting_url")
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("availability_rules")
+}
+
+model Appointment {
+  id           String            @id @default(cuid())
+  slotId       String            @unique @map("slot_id")
+  slot         AppointmentSlot   @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  learnerId    String            @map("learner_id") @db.Uuid
+  learner      User              @relation("AppointmentLearner", fields: [learnerId], references: [id])
+  status       AppointmentStatus @default(BOOKED)
+  learnerNotes String?           @map("learner_notes")
+  cancelledAt  DateTime?         @map("cancelled_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  @@index([learnerId])
+  @@map("appointments")
+}
+
 model Lead {
   id                String     @id @default(cuid())
   fullName          String     @map("full_name")
@@ -439,11 +520,274 @@ model Trainer {
   specializations String[]
   availability    String
   status          TrainerStatus @default(PENDING)
+  assignments     TrainerAssignment[]
+  proposals       TrainerProposal[]
+  teachRequests   ModuleTeachRequest[]
+  payoutLineItems TrainerPayoutLineItem[]
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("trainers")
+}
+
+enum TrainerCompensationType {
+  HOURLY
+  FLAT_PER_SESSION
+  FLAT_PER_DELIVERABLE
+  PER_STUDENT_USE
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}
+
+enum TeachRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ClassSessionStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  DISPUTED
+}
+
+enum DeliverableStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}
+
+enum PayoutLineStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum PayoutSourceType {
+  CLASS_SESSION
+  DELIVERABLE
+  CONTENT_USAGE
+}
+
+/**
+ * Marks a student as enrolled in a Course, gating access to that course's
+ * modules. Course fees are paid off-platform (variant CTA is an external
+ * link or a lead-capture form, not Razorpay), so this is admin-recorded
+ * proof of enrollment rather than a Purchase — mirrors PartnerCandidate's
+ * `enrolledAt` convention rather than the LearningPath/Bundle purchase flow.
+ */
+model CourseEnrollment {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id") @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedItemId String   @map("feed_item_id")
+  feedItem   FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+
+  @@unique([userId, feedItemId])
+  @@index([feedItemId])
+  @@map("course_enrollments")
+}
+
+/** A content-structure unit under a Course FeedItem — separate from the course's pricing `variants`. */
+model CourseModule {
+  id            String                @id @default(cuid())
+  feedItemId    String                @map("feed_item_id")
+  feedItem      FeedItem              @relation("CourseModules", fields: [feedItemId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  /** Recorded video / study material link — completing this is what triggers PER_STUDENT_USE payouts. */
+  contentUrl    String?               @map("content_url")
+  sortOrder     Int                   @default(0) @map("sort_order")
+  assignments   TrainerAssignment[]
+  teachRequests ModuleTeachRequest[]
+  completions   UserModuleCompletion[]
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@index([feedItemId])
+  @@map("course_modules")
+}
+
+/**
+ * A trainer's approved role on one module, with its own configurable pay
+ * model. A trainer can hold more than one assignment on the same module
+ * (e.g. teaching it AND having created its material) — each tracked and
+ * compensated independently.
+ */
+model TrainerAssignment {
+  id               String                  @id @default(cuid())
+  trainerId        String                  @map("trainer_id")
+  trainer          Trainer                 @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  courseModuleId   String                  @map("course_module_id")
+  courseModule     CourseModule            @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  compensationType TrainerCompensationType @map("compensation_type")
+  rateAmountPaise  Int                     @map("rate_amount_paise")
+  isActive         Boolean                 @default(true) @map("is_active")
+  classSessions    ClassSession[]
+  deliverables     Deliverable[]
+  usageEvents      ContentUsageEvent[]
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  @@unique([trainerId, courseModuleId, compensationType])
+  @@index([courseModuleId])
+  @@map("trainer_assignments")
+}
+
+/** Trainer-initiated: propose a new module (optionally under an existing course) instead of waiting to be assigned. */
+model TrainerProposal {
+  id                       String                  @id @default(cuid())
+  trainerId                String                  @map("trainer_id")
+  trainer                  Trainer                 @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  title                    String
+  description              String
+  /** Null = proposing content for a brand-new course, admin decides how to place it on approval. */
+  targetCourseId           String?                 @map("target_course_id")
+  targetCourse             FeedItem?               @relation("ProposalTargetCourse", fields: [targetCourseId], references: [id])
+  proposedCompensationType TrainerCompensationType @map("proposed_compensation_type")
+  proposedRateAmountPaise  Int                     @map("proposed_rate_amount_paise")
+  status                   ProposalStatus          @default(PENDING)
+  adminNotes               String?                 @map("admin_notes")
+  resultingModuleId        String?                 @map("resulting_module_id")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+
+  @@index([trainerId])
+  @@index([status])
+  @@map("trainer_proposals")
+}
+
+/** Trainer-initiated: request to teach an already-existing module (admin approves — the module has no separate "creator" concept to route to instead). */
+model ModuleTeachRequest {
+  id                       String                  @id @default(cuid())
+  courseModuleId           String                  @map("course_module_id")
+  courseModule             CourseModule            @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  trainerId                String                  @map("trainer_id")
+  trainer                  Trainer                 @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  proposedCompensationType TrainerCompensationType @map("proposed_compensation_type")
+  proposedRateAmountPaise  Int                     @map("proposed_rate_amount_paise")
+  status                   TeachRequestStatus      @default(PENDING)
+  decidedAt                DateTime?               @map("decided_at")
+  createdAt                DateTime                @default(now()) @map("created_at")
+
+  @@index([courseModuleId])
+  @@index([trainerId])
+  @@map("module_teach_requests")
+}
+
+/** One logged teaching occurrence — payable only once at least one attendee confirms. */
+model ClassSession {
+  id                  String                   @id @default(cuid())
+  trainerAssignmentId String                   @map("trainer_assignment_id")
+  trainerAssignment   TrainerAssignment        @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
+  scheduledAt         DateTime                 @map("scheduled_at")
+  durationMinutes     Int                      @map("duration_minutes")
+  meetingUrl          String?                  @map("meeting_url")
+  notes               String?
+  status              ClassSessionStatus       @default(PENDING_CONFIRMATION)
+  attendances         ClassSessionAttendance[]
+  payoutLineItem      TrainerPayoutLineItem?
+  createdAt           DateTime                 @default(now()) @map("created_at")
+
+  @@index([trainerAssignmentId])
+  @@map("class_sessions")
+}
+
+model ClassSessionAttendance {
+  id             String       @id @default(cuid())
+  classSessionId String       @map("class_session_id")
+  classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  studentId      String       @map("student_id") @db.Uuid
+  student        User         @relation(fields: [studentId], references: [id])
+  confirmed      Boolean      @default(false)
+  confirmedAt    DateTime?    @map("confirmed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([classSessionId, studentId])
+  @@map("class_session_attendances")
+}
+
+/** A submitted piece of work (content, curriculum design, etc.) for a FLAT_PER_DELIVERABLE assignment. */
+model Deliverable {
+  id                  String            @id @default(cuid())
+  trainerAssignmentId String            @map("trainer_assignment_id")
+  trainerAssignment   TrainerAssignment @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  fileUrl             String?           @map("file_url")
+  status              DeliverableStatus @default(SUBMITTED)
+  adminNotes          String?           @map("admin_notes")
+  payoutLineItem      TrainerPayoutLineItem?
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  @@index([trainerAssignmentId])
+  @@map("deliverables")
+}
+
+model UserModuleCompletion {
+  id             String       @id @default(cuid())
+  userId         String       @map("user_id") @db.Uuid
+  user           User         @relation(fields: [userId], references: [id])
+  courseModuleId String       @map("course_module_id")
+  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  completedAt    DateTime     @default(now()) @map("completed_at")
+
+  @@unique([userId, courseModuleId])
+  @@map("user_module_completions")
+}
+
+/** One student's first-time use of a PER_STUDENT_USE module — locks in the rate at the time it happened. */
+model ContentUsageEvent {
+  id                  String            @id @default(cuid())
+  trainerAssignmentId String            @map("trainer_assignment_id")
+  trainerAssignment   TrainerAssignment @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
+  studentId           String            @map("student_id") @db.Uuid
+  student             User              @relation(fields: [studentId], references: [id])
+  amountPaise         Int               @map("amount_paise")
+  payoutLineItem      TrainerPayoutLineItem?
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  @@unique([trainerAssignmentId, studentId])
+  @@map("content_usage_events")
+}
+
+/**
+ * One payable line for a trainer, from whichever source triggered it.
+ * Admin reviews PENDING items, approves, then records payment — mirroring
+ * the referral-commission payout pattern already established elsewhere in
+ * this schema, simplified here to a payment-reference string rather than a
+ * full attachment-upload flow.
+ */
+model TrainerPayoutLineItem {
+  id                  String            @id @default(cuid())
+  trainerId           String            @map("trainer_id")
+  trainer             Trainer           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  sourceType          PayoutSourceType  @map("source_type")
+  classSessionId      String?           @unique @map("class_session_id")
+  classSession        ClassSession?     @relation(fields: [classSessionId], references: [id])
+  deliverableId       String?           @unique @map("deliverable_id")
+  deliverable         Deliverable?      @relation(fields: [deliverableId], references: [id])
+  contentUsageEventId String?           @unique @map("content_usage_event_id")
+  contentUsageEvent   ContentUsageEvent? @relation(fields: [contentUsageEventId], references: [id])
+  amountPaise         Int               @map("amount_paise")
+  status              PayoutLineStatus  @default(PENDING)
+  approvedAt          DateTime?         @map("approved_at")
+  paidAt              DateTime?         @map("paid_at")
+  paymentReference    String?           @map("payment_reference")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  @@index([trainerId, status])
+  @@map("trainer_payout_line_items")
 }
 
 model Referral {
@@ -865,6 +1209,8 @@ model LearningPath {
   rewardType             LearningPathRewardType @default(CERTIFICATE) @map("reward_type")
   /** Emoji shown on the earned badge — only meaningful when rewardType is BADGE. */
   badgeIcon              String?                @map("badge_icon")
+  /** Price in paise (1/100 rupee, matching Razorpay's smallest-unit requirement). Null = free, open to any logged-in learner. */
+  priceInPaise           Int?                   @map("price_in_paise")
   items                  LearningPathItem[]
   progress               UserLearningProgress[]
   itemCompletions        UserPathItemCompletion[]
@@ -873,11 +1219,78 @@ model LearningPath {
   badges                 Badge[]
   referralCampaignCourses ReferralCampaignCourse[]
   commissionTransactions ReferralCommissionTransaction[]
+  bundlePaths            BundlePath[]
+  purchases              Purchase[]
   createdAt              DateTime               @default(now()) @map("created_at")
   updatedAt              DateTime               @updatedAt @map("updated_at")
 
   @@index([status, visibility])
   @@map("learning_paths")
+}
+
+/** A combo offer bundling several LearningPaths at one price, sold as a single purchase. */
+model Bundle {
+  id           String       @id @default(cuid())
+  title        String
+  slug         String       @unique
+  description  String
+  priceInPaise Int          @map("price_in_paise")
+  isActive     Boolean      @default(true) @map("is_active")
+  paths        BundlePath[]
+  purchases    Purchase[]
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  @@map("bundles")
+}
+
+model BundlePath {
+  bundleId       String       @map("bundle_id")
+  bundle         Bundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  learningPathId String       @map("learning_path_id")
+  learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+
+  @@id([bundleId, learningPathId])
+  @@map("bundle_paths")
+}
+
+enum PurchasableType {
+  LEARNING_PATH
+  BUNDLE
+}
+
+enum PurchaseStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+/**
+ * One checkout attempt against Razorpay. Created PENDING when the order is
+ * opened, flipped to PAID once the payment signature is verified (either via
+ * the client's post-checkout callback or the Razorpay webhook — whichever
+ * arrives; both call the same service method, which is idempotent).
+ */
+model Purchase {
+  id                String          @id @default(cuid())
+  userId            String          @map("user_id") @db.Uuid
+  user              User            @relation(fields: [userId], references: [id])
+  purchasableType   PurchasableType @map("purchasable_type")
+  learningPathId    String?         @map("learning_path_id")
+  learningPath      LearningPath?   @relation(fields: [learningPathId], references: [id])
+  bundleId          String?         @map("bundle_id")
+  bundle            Bundle?         @relation(fields: [bundleId], references: [id])
+  amountPaise       Int             @map("amount_paise")
+  status            PurchaseStatus  @default(PENDING)
+  razorpayOrderId   String          @unique @map("razorpay_order_id")
+  razorpayPaymentId String?         @map("razorpay_payment_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([learningPathId])
+  @@index([bundleId])
+  @@map("purchases")
 }
 
 model LearningPathItem {

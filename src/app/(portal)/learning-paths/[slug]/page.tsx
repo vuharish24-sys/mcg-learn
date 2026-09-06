@@ -6,8 +6,10 @@ import { getPathFeedItemHref } from "@/lib/feed-actions";
 import { pathCoverImageUrl, pathPreviewImages } from "@/lib/learning-path-media";
 import { feedService } from "@/services/feed.service";
 import { learningPathService } from "@/services/learning-path.service";
+import { purchaseService } from "@/services/purchase.service";
 import { LearningPathStartButton } from "@/components/learning-path/learning-path-start-button";
 import { PathCurriculumRow } from "@/components/learning-path/path-curriculum-row";
+import { BuyButton } from "@/components/purchases/buy-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MediaCover } from "@/components/ui/media-cover";
@@ -27,8 +29,9 @@ export default async function LearningPathDetailPage({
   const detail = await learningPathService.getPathWithUserProgress(path.id, user.id);
   if (!detail) notFound();
 
+  const hasAccess = await purchaseService.hasPathAccess(user.id, path.id);
   const { progress, itemsWithStatus } = detail;
-  const started = progress?.status === "IN_PROGRESS" || progress?.status === "COMPLETED";
+  const started = (progress?.status === "IN_PROGRESS" || progress?.status === "COMPLETED") && hasAccess;
   const cover = pathCoverImageUrl(path, path.items);
   const previews = pathPreviewImages(path.items, 5);
 
@@ -55,6 +58,11 @@ export default async function LearningPathDetailPage({
               </Badge>
             )}
             {path.isFeatured && <Badge className="bg-amber-100 text-amber-900">Featured</Badge>}
+            {path.priceInPaise ? (
+              <Badge className="bg-amber-500 text-white">₹{(path.priceInPaise / 100).toLocaleString("en-IN")}</Badge>
+            ) : (
+              <Badge className="bg-teal-600 text-white">Free</Badge>
+            )}
           </div>
           <div className="max-w-2xl">
             <h1 className="text-2xl font-bold text-white sm:text-3xl md:text-4xl">{path.title}</h1>
@@ -81,7 +89,16 @@ export default async function LearningPathDetailPage({
               <p className="text-sm text-white/75">{path.items.length} lessons in this path</p>
             </div>
             <div className="w-full sm:w-auto [&_button]:w-full sm:[&_button]:w-auto">
-              <LearningPathStartButton learningPathId={path.id} started={started} />
+              {path.priceInPaise && !hasAccess ? (
+                <BuyButton
+                  purchasableType="LEARNING_PATH"
+                  id={path.id}
+                  label={`Buy for ₹${(path.priceInPaise / 100).toLocaleString("en-IN")}`}
+                  learner={{ fullName: user.fullName, email: user.email, phone: user.phone }}
+                />
+              ) : (
+                <LearningPathStartButton learningPathId={path.id} started={started} />
+              )}
             </div>
           </div>
         </div>
@@ -119,7 +136,7 @@ export default async function LearningPathDetailPage({
         <CardContent className="divide-y px-4 dark:divide-slate-800 sm:px-6">
           {itemsWithStatus.map((item, index) => {
             const href = getPathFeedItemHref(item.feedItem.id, item.feedItem.type, path.id);
-            const locked = !started && index > 0;
+            const locked = !hasAccess || (!started && index > 0);
             return (
               <PathCurriculumRow
                 key={item.id}

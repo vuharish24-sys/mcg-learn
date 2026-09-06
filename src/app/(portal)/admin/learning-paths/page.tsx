@@ -73,6 +73,15 @@ export default async function AdminLearningPathsPage() {
                           Featured
                         </Badge>
                       )}
+                      {path.priceInPaise ? (
+                        <Badge className="border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                          ₹{(path.priceInPaise / 100).toLocaleString("en-IN")}
+                        </Badge>
+                      ) : (
+                        <Badge className="border border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+                          Free
+                        </Badge>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-wrap items-center justify-between gap-4">
@@ -97,6 +106,7 @@ export default async function AdminLearningPathsPage() {
                         certificateTemplate: path.certificateTemplate ?? "",
                         rewardType: path.rewardType,
                         badgeIcon: path.badgeIcon ?? "",
+                        priceInPaise: path.priceInPaise,
                         items: path.items.map((item) => ({
                           feedItemId: item.feedItemId,
                           sortOrder: item.sortOrder,

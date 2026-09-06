@@ -33,6 +33,7 @@ export function LearningPathForm({
     certificateTemplate?: string;
     rewardType?: string;
     badgeIcon?: string;
+    priceInPaise?: number | null;
     items: PathItem[];
   };
   endpoint: string;
@@ -49,6 +50,10 @@ export function LearningPathForm({
     initial?.requiredQuizFeedItemId ?? "",
   );
   const [rewardType, setRewardType] = useState(initial?.rewardType ?? "CERTIFICATE");
+  const [isPaid, setIsPaid] = useState(Boolean(initial?.priceInPaise));
+  const [priceRupees, setPriceRupees] = useState(
+    initial?.priceInPaise ? String(initial.priceInPaise / 100) : "",
+  );
 
   const quizzesInPath = items
     .map((item) => feedItems.find((feed) => feed.value === item.feedItemId && feed.type === "QUIZ"))
@@ -87,6 +92,7 @@ export function LearningPathForm({
       certificateTemplate: formData.get("certificateTemplate") || null,
       rewardType,
       badgeIcon: rewardType === "BADGE" ? formData.get("badgeIcon") || null : null,
+      priceInPaise: isPaid && priceRupees ? Math.round(Number(priceRupees) * 100) : null,
       items: items
         .filter((item) => item.feedItemId)
         .map((item, index) => ({
@@ -217,6 +223,27 @@ export function LearningPathForm({
                 <span className="text-sm font-medium">Certificate template (optional)</span>
                 <Input name="certificateTemplate" defaultValue={initial?.certificateTemplate ?? ""} className={fieldClassName} />
               </label>
+            )}
+          </div>
+
+          <div className="space-y-2 rounded-lg border p-3 dark:border-slate-800">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} /> Paid path
+            </label>
+            {isPaid ? (
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium">Price (₹)</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step="0.01"
+                  value={priceRupees}
+                  onChange={(e) => setPriceRupees(e.target.value)}
+                  className={fieldClassName}
+                />
+              </label>
+            ) : (
+              <p className="text-xs text-slate-500">Free — open to any logged-in learner.</p>
             )}
           </div>
 

@@ -2,6 +2,9 @@ import { TrainerStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const trainerService = {
+  findByUserId(userId: string) {
+    return prisma.trainer.findUnique({ where: { userId } });
+  },
   list(search?: string, status?: string) {
     return prisma.trainer.findMany({
       where: {

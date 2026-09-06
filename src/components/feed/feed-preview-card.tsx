@@ -1,6 +1,6 @@
-import { Briefcase, GraduationCap, Gift } from "lucide-react";
+import { Briefcase, GraduationCap, Gift, CalendarDays } from "lucide-react";
 import { enumLabel, formatDate } from "@/lib/utils";
-import { parseFeedContent } from "@/lib/feed-actions";
+import { parseFeedContent, SESSION_TYPE_LABEL } from "@/lib/feed-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { FeedActionButton } from "@/components/feed/feed-action-button";
@@ -42,8 +42,10 @@ export function FeedPreviewCard({ item, hasBenefit }: { item: FeedCardItem; hasB
   const siteLabel = item.previewSiteName || hostnameFromUrl(item.externalUrl);
   const isJob = item.type === "JOB_POSTING";
   const isCourse = item.type === "COURSE";
+  const isSession = item.type === "WEBINAR";
   const job = isJob ? parseFeedContent(item.content).job : undefined;
   const course = isCourse ? parseFeedContent(item.content).course : undefined;
+  const session = isSession ? parseFeedContent(item.content) : undefined;
   const jobMeta = job ? [job.company, job.location, job.employmentType].filter(Boolean).join(" · ") : null;
   const courseModes = course ? [...new Set(course.variants.map((v) => v.mode))].join(", ") : null;
   const courseMeta = course ? [course.instructor, courseModes].filter(Boolean).join(" · ") : null;
@@ -78,6 +80,10 @@ export function FeedPreviewCard({ item, hasBenefit }: { item: FeedCardItem; hasB
               <Badge className="gap-1 bg-sky-600 text-white shadow-sm">
                 <GraduationCap className="size-3" /> Course
               </Badge>
+            ) : isSession ? (
+              <Badge className="gap-1 bg-teal-600 text-white shadow-sm">
+                <CalendarDays className="size-3" /> {SESSION_TYPE_LABEL[session?.sessionType ?? "WEBINAR"]}
+              </Badge>
             ) : (
               <Badge className="bg-white/95 text-teal-900 shadow-sm">{enumLabel(item.type)}</Badge>
             )}
@@ -85,6 +91,11 @@ export function FeedPreviewCard({ item, hasBenefit }: { item: FeedCardItem; hasB
             {job?.closesAt && (
               <Badge className="bg-white/95 text-slate-700 shadow-sm">
                 Closes {formatDate(job.closesAt)}
+              </Badge>
+            )}
+            {session?.webinarAt && (
+              <Badge className="bg-white/95 text-slate-700 shadow-sm">
+                {formatDate(session.webinarAt)}
               </Badge>
             )}
             {course && course.variants.length > 1 && (

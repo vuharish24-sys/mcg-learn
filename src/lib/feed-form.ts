@@ -74,11 +74,9 @@ export function feedItemFormFields(
     },
     {
       name: "content",
-      label: "Content JSON (quiz/webinar)",
+      label: "Content JSON (quiz)",
       type: "textarea",
-      placeholder:
-        'Quiz: {"questions":[{"question":"...","options":["A","B"],"answer":0}]}\n' +
-        'Webinar: {"webinarAt":"2026-12-31T18:00:00","location":"Zoom link or venue"}',
+      placeholder: 'Quiz: {"questions":[{"question":"...","options":["A","B"],"answer":0}]}',
     },
     {
       name: "status",

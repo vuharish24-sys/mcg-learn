@@ -1,9 +1,9 @@
 # MCG Learn — Session Changelog
 
-**Date:** 2026-08-16 (updated — see §16 for this update)
-**Period:** 2026-08-01 → 2026-08-16
-**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system
-**Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI
+**Date:** 2026-09-03 (updated — see §18–22 for this update)
+**Period:** 2026-08-01 → 2026-09-03
+**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system, content sources, session scheduling, appointment booking, real in-app purchasing, full trainer program
+**Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI. §18–22 were verified the same way against the local dev server (real browser click-throughs plus DB-level assertions); commit status for each is noted explicitly since not everything below has been pushed yet.
 
 ---
 
@@ -275,3 +275,107 @@ Committed as `c7b785d` and pushed to `main`. Confirmed live on Netlify by matchi
 Carried forward from §15 (still true): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented, course fee is free text, all 10 real courses still `DRAFT`, feed-card spacing intervals hardcoded.
 
 No new gaps identified this update.
+
+---
+
+## 18. Content Sources: pull recent posts into the feed or a learning path (committed `0ea8fc9`)
+
+Admin-configurable polling of MCG's own YouTube channel, Instagram account, and blog RSS feed, so new posts don't have to be re-entered into the feed by hand every time.
+
+- **`ContentSource`** (YouTube/Instagram/RSS, encrypted API key/token — same AES scheme as AI provider keys) + **`ContentSourceItem`** (one fetched post, deduped by the platform's own post ID)
+- Admin clicks **Fetch latest** (`/admin/content-sources`) — polls every active source, stages genuinely new items only (already-seen items never resurface), never auto-publishes
+- Each staged item can be turned into a `DRAFT` feed item, attached directly to an existing learning path, or dismissed — picking a category is required since `FeedItem.categoryId` is non-nullable
+- YouTube via the Data API v3 (resolves the channel's uploads playlist, no OAuth needed for public data); Instagram via the Graph API (needs a Meta Business App — same underlying setup work as any Instagram integration); RSS/Atom via a small dependency-free parser (no library added, consistent with how `link-preview.ts` already hand-parses HTML)
+
+Verified live against a real public RSS feed (fetched 10 real posts, imported one to the feed and one to a learning path, dismissed a third, confirmed re-fetching doesn't duplicate already-seen items) — then all test data cleaned up. YouTube/Instagram fetchers are code-complete but need real credentials from the account owner to exercise live.
+
+---
+
+## 19. Session scheduling: Free Session / Webinar / Class (uncommitted)
+
+The prior `WEBINAR` feed type was a single fixed date/time with a plain-text location field, manually edited as raw JSON. Reworked into a proper scheduling primitive, still using the same `FeedItem`/JSON-content storage (no migration needed for this one):
+
+- `content.sessionType` (`FREE_SESSION` | `WEBINAR` | `CLASS`) + `content.meetingUrl`, alongside the existing `webinarAt`/`location` fields — old webinar content without `sessionType` defaults to `WEBINAR` for backward compatibility
+- Admin gets a dedicated **Session details** panel (session type, date/time, meeting link, venue notes) in place of the raw-JSON textarea, mirroring the existing `JobPostingContentFields`/`CourseContentFields` pattern
+- New **`/sessions`** page: every upcoming published session, any type, sorted by date, with a type badge and a register link — a first-class destination instead of a card buried in the general feed
+- Feed cards and the session detail page (`/feed/[id]/webinar`) now show the specific type and, if present, a "Join session" button linking straight to the real meeting URL
+
+Verified live: created a real Free Session (Google Meet link, future date) through the admin form, confirmed it renders correctly on `/sessions`, the main feed (teal "Free Session" badge + date chip), and the detail page (join link resolves to the real URL) — then deleted the test item.
+
+---
+
+## 20. Appointments: 1:1 booking, recurring availability, and notifications (uncommitted)
+
+Prompted by: "can this handle free one-to-one sessions based on available slots?" — the existing Sessions feature (§19) is broadcast (one time slot, many registrants); this is real slot-based booking, one learner per slot, for Career Officers and Trainers.
+
+**Booking core** — `AppointmentSlot` (a host's open time window) + `Appointment` (a learner's claim on one slot, enforced unique at the database level so double-booking is structurally impossible, not just UI-prevented). Cancelling doesn't reopen the same slot for rebooking by design — the host opens a fresh one — keeping booking a single atomic `create` with no separate "release" step to get wrong.
+
+- `/my-availability` (Career Officers & Trainers): open a slot, see who booked it, cancel
+- `/appointments` (everyone): browse open slots across all hosts, book with an optional note, manage own upcoming bookings
+- Race-safety verified directly: two simultaneous bookings on the same slot — the loser is caught via the database's own unique-constraint violation and turned into a clean "someone just booked this" error, not a crash (same pattern already used for referral-code race conditions)
+
+**Recurring availability** — rather than opening slots one at a time forever, a host can define a weekly pattern (days + time range + slot duration) via `AvailabilityRule`; saving it immediately materializes real `AppointmentSlot` rows for the next few weeks, and a "Generate more weeks" button extends the horizon later. Verified live: Mon/Wed/Fri, 4–6pm, 30-min slots correctly generated exactly 48 real slots across 4 weeks (3 days × 4 slots × 4 weeks), all landing on the right days; re-generating immediately correctly produced 0 duplicates.
+
+**Notifications** — fires on booking and cancellation, to both parties:
+- Email via **Resend**, isolated behind one function (`lib/notifications/email.ts`) so swapping providers later is a small change, not a rearchitect
+- WhatsApp via the Meta Graph API directly (no library — same approach as the YouTube/Instagram fetchers), phone numbers auto-normalized to E.164
+- Both gracefully no-op when unconfigured — verified live: booking and cancelling worked correctly while the console logged the expected "skipped, not configured" messages rather than erroring
+- WhatsApp specifically needs a Meta Business App (shared setup with §18's Instagram source) *and* a Meta-approved message template before it can send anything real — business-initiated WhatsApp messages require a pre-approved template, this isn't a code limitation
+
+---
+
+## 21. Real in-app purchasing: Razorpay, paid learning paths, bundles (uncommitted)
+
+Prompted by wanting to know if the app could handle individual-topic or package purchases — it couldn't (zero payment code existed anywhere). This is a genuine reversal of the platform's "free content, paid programs happen off-platform" positioning for whichever specific paths get priced, done deliberately after confirming that's actually wanted.
+
+- `LearningPath.priceInPaise` (null = free, as before) + new **`Bundle`**/`BundlePath` (admin combines 2+ paid paths into one package price)
+- **`Purchase`** tracks every checkout attempt (`PENDING` → `PAID`/`FAILED`), tied to a real Razorpay order ID
+- Checkout: order creation → Razorpay's hosted Checkout widget → client posts back the payment signature for verification → **plus a webhook** (`payment.captured`) as the reliable fallback if a learner closes the tab before the client-side confirmation call fires — both paths call the same idempotent service method
+- **Real content gating, not just a UI hint**: a paid, unpurchased path shows every curriculum item locked with a "Buy" button instead of "Start"; the seven content-serving pages (quiz/pdf/webinar/career/engage/watch/course) each independently re-check entitlement when reached via a `learningPathId`, so a guessed or bookmarked direct URL to gated content still 404s
+- Entitlement resolves through *either* a direct path purchase *or* a bundle purchase containing that path — verified cross-user that a bundle buyer gets access to all member paths and a path-only buyer does not get bundle-mate paths they never bought
+
+Verified live end-to-end with simulated `PAID` purchase rows (no real Razorpay credentials available in this environment): direct-purchase unlock, bundle-purchase unlock cascading to member paths, cross-user isolation (no leakage), and the "Payments are not configured yet" graceful message when Buy is clicked without real keys. Needs real `RAZORPAY_KEY_ID`/`KEY_SECRET`/`WEBHOOK_SECRET` to process an actual payment.
+
+---
+
+## 22. Trainer Program: modules, assignments, proposals, sessions, deliverables, payouts (uncommitted)
+
+The `Trainer` model was previously just a directory profile (free-text specializations, free-text availability, admin manually flips a status). Built out into a full program covering topic assignment and four distinct, independently-configurable compensation models — the largest single feature this session.
+
+**Content structure**: `CourseModule` — real content-structure rows under a Course `FeedItem`, separate from its pricing `variants` (a course's curriculum breakdown vs. its priced delivery options are orthogonal).
+
+**Getting a trainer onto a module, three ways in** (all converge on the same `TrainerAssignment` record):
+- Admin assigns directly
+- Trainer **proposes** a new topic/module (optionally under an existing course, or a brand-new one) — admin approval creates the module and the assignment in one step
+- Trainer **requests to teach** an already-existing module — admin approval creates the assignment
+
+**Four compensation types, chosen per assignment, not fixed platform-wide:**
+| Type | Trigger | Confirmation needed? |
+|---|---|---|
+| `HOURLY` | Trainer logs a class session (module, date, duration) | Yes — at least one attendee must confirm before it's payable |
+| `FLAT_PER_SESSION` | Same as above, fixed fee regardless of duration | Yes |
+| `FLAT_PER_DELIVERABLE` | Trainer submits work (content, curriculum design) | No — admin approval alone triggers payment |
+| `PER_STUDENT_USE` | A student marks the module's content complete | No — accrues automatically per unique student, no upfront pay |
+
+The student-confirmation step on `HOURLY`/`FLAT_PER_SESSION` exists specifically as a check against a trainer over-reporting hours — a session sits in `PENDING_CONFIRMATION` and is invisible to the payout ledger until an attendee confirms it.
+
+**Payout ledger** — every payable event, however it was triggered, becomes one `TrainerPayoutLineItem` (`PENDING` → `APPROVED` → `PAID`, with an optional payment reference), reviewed from one consolidated admin screen (`/admin/trainer-program`) rather than four separate ones. This deliberately mirrors the referral-commission payout pattern already established elsewhere in the schema, simplified to a reference string instead of a full attachment-upload flow to keep scope bounded.
+
+**Surfaces**: `/admin/trainer-program` (modules, direct assignment, proposal/teach-request/deliverable review, payout ledger), `/trainer-portal` (a trainer's own assignments with the matching action per compensation type, browse-and-request-to-teach, submit proposals, earnings history), `/my-sessions` (any learner confirms attendance on sessions they're logged as attending), and a **Modules** section added to the course detail page with a per-module "Mark complete" button.
+
+Verified live end-to-end with a real (temporarily role-switched) test trainer account: module creation → direct assignment (₹500/hour) → session logged (120 min) → attendance confirmed by a second real account → payout line item created at exactly ₹1,000 (verified to the paise) → approved → paid with a reference. Separately verified: a submitted proposal's approval correctly created both a new module *and* a new `FLAT_PER_DELIVERABLE` assignment from the admin's chosen final terms; a deliverable's approval paid the exact flat rate; a `PER_STUDENT_USE` module completion paid the exact per-use rate on first use and correctly did **not** pay again when the same student's completion was replayed. All test data (trainer profile, modules, assignments, sessions, deliverables, usage events, payout lines) deleted afterward with a final zero-count check; the test account's role reverted.
+
+**Deliberately deferred, not built**: a shared cross-trainer content library (discussed and scoped, but held back — the trainer program has zero real trainers on it yet, and a content marketplace needs real supply-and-demand to be worth building rather than being a bet on demand that might not show up). The current architecture supports adding it later purely additively (a new table plus one optional column), without revisiting anything shipped here.
+
+---
+
+## 23. Known gaps (current, 2026-09-03)
+
+Carried forward from §17 (still true): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented, course fee on non-priced display still free text, feed-card spacing intervals hardcoded.
+
+New since §17:
+- Content Sources: Instagram fetcher is code-complete but untested live (needs a real Meta Business App + token from the account owner)
+- Appointments: no email/SMS/WhatsApp actually sends yet (needs real Resend + Meta WhatsApp credentials); "Generate more weeks" extends from *today*, not from the last-generated slot, so clicking it twice in quick succession correctly produces zero new slots rather than actually extending further — fine for real usage (time will have passed by the next real click) but worth knowing
+- Purchasing: no real Razorpay keys configured anywhere yet — checkout fails gracefully with a clear message rather than silently
+- Trainer Program: payout proof-of-payment is a plain reference string, not a file-upload/attachment flow like the referral-commission payments have; no shared content library across trainers yet (see §22)
+- None of §19–22 have been pushed to the remote repository as of this writing — committed features stop at `0ea8fc9`/`1480f30`

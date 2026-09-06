@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
+import { purchaseService } from "@/services/purchase.service";
 import { FeedLeadForm } from "@/components/feed/feed-lead-form";
 import { PathItemCompleteButton } from "@/components/learning-path/path-item-complete-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,7 @@ export default async function FeedCareerPage({
   const path = learningPathId
     ? await prisma.learningPath.findUnique({ where: { id: learningPathId } })
     : null;
+  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
 
   await prisma.feedItem.update({
     where: { id },

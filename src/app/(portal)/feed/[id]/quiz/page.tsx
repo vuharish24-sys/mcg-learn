@@ -5,6 +5,7 @@ import { parseFeedContent } from "@/lib/feed-actions";
 import { resolveQuizPassPercentage } from "@/lib/quiz-pass";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
+import { purchaseService } from "@/services/purchase.service";
 import { QuizPlayer } from "@/components/feed/quiz-player";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default async function FeedQuizPage({
         include: { items: true },
       })
     : null;
+  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
 
   const content = parseFeedContent(item.content);
   const allQuestions = content.questions ?? [];

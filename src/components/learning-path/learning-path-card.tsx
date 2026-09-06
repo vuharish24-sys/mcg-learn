@@ -26,6 +26,7 @@ export type LearningPathCardPath = {
   difficulty: LearningPathDifficulty;
   estimatedDuration: number | null;
   isFeatured: boolean;
+  priceInPaise?: number | null;
   items: PathCardItem[];
 };
 
@@ -58,6 +59,11 @@ export function LearningPathCard({
             <Badge className="max-w-[55%] truncate bg-white/90 text-teal-900 shadow-sm">{path.category}</Badge>
             <div className="flex flex-wrap justify-end gap-1.5">
               {path.isFeatured && <Badge className="bg-amber-100 text-amber-900 shadow-sm">Featured</Badge>}
+              {path.priceInPaise ? (
+                <Badge className="bg-amber-500 text-white shadow-sm">₹{(path.priceInPaise / 100).toLocaleString("en-IN")}</Badge>
+              ) : (
+                <Badge className="bg-teal-600 text-white shadow-sm">Free</Badge>
+              )}
               <Badge className="bg-black/45 text-white backdrop-blur-sm">{enumLabel(path.difficulty)}</Badge>
             </div>
           </div>

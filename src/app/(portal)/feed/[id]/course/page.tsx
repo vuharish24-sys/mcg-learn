@@ -7,9 +7,14 @@ import { parseFeedContent } from "@/lib/feed-actions";
 import { formatDate } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
+import { purchaseService } from "@/services/purchase.service";
 import { benefitService, computeEffectivePrice } from "@/services/benefit.service";
+import { trainerProgramService } from "@/services/trainer-program.service";
+import { courseEnrollmentService } from "@/services/course-enrollment.service";
 import { FeedLeadForm } from "@/components/feed/feed-lead-form";
 import { PathItemCompleteButton } from "@/components/learning-path/path-item-complete-button";
+import { MarkModuleCompleteButton } from "@/components/trainer-program/mark-module-complete-button";
+import { Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -32,12 +37,20 @@ export default async function FeedCoursePage({
   const path = learningPathId
     ? await prisma.learningPath.findUnique({ where: { id: learningPathId } })
     : null;
+  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
 
   const { course } = parseFeedContent(item.content);
 
   const benefitsByVariant: Map<string, Benefit[]> = course
     ? await benefitService.getActiveForVariantIds(course.variants.map((v) => v.id))
     : new Map();
+
+  const [modules, myCompletions, isEnrolled] = await Promise.all([
+    trainerProgramService.listModulesForCourse(id),
+    prisma.userModuleCompletion.findMany({ where: { userId: user.id }, select: { courseModuleId: true } }),
+    user.role.key === "ADMIN" ? Promise.resolve(true) : courseEnrollmentService.isEnrolled(user.id, id),
+  ]);
+  const completedModuleIds = new Set(myCompletions.map((c) => c.courseModuleId));
 
   await prisma.feedItem.update({
     where: { id },
@@ -61,6 +74,41 @@ export default async function FeedCoursePage({
         {course?.instructor && <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Instructor: {course.instructor}</p>}
         {path && <p className="mt-2 text-sm text-teal-700">Part of: {path.title}</p>}
       </div>
+
+      {modules.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Modules</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {!isEnrolled && (
+              <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+                <Lock className="size-3.5" /> Enroll in this course to unlock module content and progress tracking.
+              </p>
+            )}
+            {modules.map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 dark:border-slate-800">
+                <div>
+                  <p className="font-medium">{m.title}</p>
+                  {m.description && <p className="text-sm text-slate-500">{m.description}</p>}
+                  {isEnrolled && m.contentUrl && (
+                    <a href={m.contentUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-teal-700 hover:underline">
+                      Watch / open content
+                    </a>
+                  )}
+                </div>
+                {!isEnrolled ? (
+                  <Lock className="size-4 shrink-0 text-slate-400" />
+                ) : completedModuleIds.has(m.id) ? (
+                  <Badge className="border border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+                    Completed
+                  </Badge>
+                ) : (
+                  <MarkModuleCompleteButton courseModuleId={m.id} />
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {course?.variants.map((variant) => {
         const label = variant.tier ? `${variant.tier} — ${variant.mode}` : variant.mode;

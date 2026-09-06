@@ -9,6 +9,7 @@ import { Input, Textarea, fieldClassName } from "@/components/ui/input";
 import { MediaUploadField } from "@/components/media/media-upload-field";
 import { JobPostingContentFields } from "@/components/forms/job-posting-content-fields";
 import { CourseContentFields } from "@/components/forms/course-content-fields";
+import { SessionContentFields } from "@/components/forms/session-content-fields";
 
 export function ResourceCreateForm({
   title,
@@ -140,13 +141,15 @@ export function ResourceCreateForm({
             return (
             <Wrapper key={field.name} className={field.type === "textarea" || field.type === "multiselect" || (field.type === "url" && field.allowUpload) ? "sm:col-span-2" : ""}>
               {(field.type === "url" && field.allowUpload) ||
-              (field.name === "content" && (typeValue === "JOB_POSTING" || typeValue === "COURSE")) ? null : (
+              (field.name === "content" && (typeValue === "JOB_POSTING" || typeValue === "COURSE" || typeValue === "WEBINAR")) ? null : (
                 <span className="mb-1.5 block text-sm font-medium">{field.label}</span>
               )}
               {field.name === "content" && typeValue === "JOB_POSTING" ? (
                 <JobPostingContentFields name={field.name} defaultValue={fieldValue(field)} />
               ) : field.name === "content" && typeValue === "COURSE" ? (
                 <CourseContentFields name={field.name} defaultValue={fieldValue(field)} />
+              ) : field.name === "content" && typeValue === "WEBINAR" ? (
+                <SessionContentFields name={field.name} defaultValue={fieldValue(field)} />
               ) : field.type === "textarea" ? (
                 <Textarea
                   name={field.name}
