@@ -13,15 +13,20 @@ export function LearningPathStartButton({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [optimisticallyStarted, setOptimisticallyStarted] = useState(false);
 
   async function start() {
     setLoading(true);
-    await fetch(`/api/v1/learning-paths/${learningPathId}/start`, { method: "POST" });
+    const response = await fetch(`/api/v1/learning-paths/${learningPathId}/start`, { method: "POST" });
+    if (response.ok) setOptimisticallyStarted(true);
     setLoading(false);
     router.refresh();
   }
 
-  if (started) return null;
+  // Hide as soon as the request succeeds rather than waiting for router.refresh()'s
+  // server round-trip — otherwise there's a window where the button looks clickable
+  // again right after "Starting…" clears, inviting a double-click.
+  if (started || optimisticallyStarted) return null;
 
   return (
     <Button

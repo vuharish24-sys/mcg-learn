@@ -37,7 +37,7 @@ type ContinueItem = {
 };
 
 const tabs = [
-  { id: "courses" as const, label: "Courses", icon: Route },
+  { id: "courses" as const, label: "Learning Paths", icon: Route },
   { id: "feed" as const, label: "Learning Feed", icon: BookOpen },
 ];
 
@@ -116,7 +116,7 @@ export function DashboardLearningTabs({
           {otherCourses.length > 0 ? (
             <div className="space-y-3">
               {continueLearning.length > 0 && (
-                <h3 className="text-sm font-semibold text-slate-500">Explore courses</h3>
+                <h3 className="text-sm font-semibold text-slate-500">Explore learning paths</h3>
               )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {otherCourses.map((path) => (
@@ -134,7 +134,7 @@ export function DashboardLearningTabs({
           {continueLearning.length === 0 && otherCourses.length === 0 && (
             <Card>
               <CardContent className="py-10 text-center text-sm text-slate-500">
-                No courses published yet.{" "}
+                No learning paths published yet.{" "}
                 <Link href={coursesHref} className="font-semibold text-teal-700 hover:underline">
                   Browse learning paths
                 </Link>

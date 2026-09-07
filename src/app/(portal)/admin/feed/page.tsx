@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { feedService } from "@/services/feed.service";
 import { enumLabel, formatDate } from "@/lib/utils";
+import { feedTypeLabel } from "@/lib/feed-actions";
 import { feedItemFormFields, feedItemInitialValues } from "@/lib/feed-form";
 import { ResourceCreateForm } from "@/components/forms/resource-create-form";
 import { GenerateFeedItemForm } from "@/components/forms/generate-feed-item-form";
@@ -72,7 +73,7 @@ export default async function AdminFeedPage() {
               <div>
                 <CardTitle className="text-lg">{item.title}</CardTitle>
                 <p className="mt-1 text-sm text-slate-500">
-                  {item.category.name} · {enumLabel(item.type)} · {item.viewCount} views
+                  {item.category.name} · {feedTypeLabel(item.type)} · {item.viewCount} views
                   {item.status === "DRAFT" && item.publishedAt
                     ? ` · Scheduled for ${formatDate(item.publishedAt)}`
                     : item.publishedAt

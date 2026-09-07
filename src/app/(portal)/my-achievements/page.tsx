@@ -3,7 +3,6 @@ import { Download, ExternalLink, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { certificateService } from "@/services/certificate.service";
 import { badgeService } from "@/services/badge.service";
-import { appUrl } from "@/lib/env";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -82,8 +81,6 @@ export default async function MyAchievementsPage() {
           </Card>
         )}
       </section>
-
-      <p className="text-xs text-slate-400">Verification base URL: {appUrl()}/verify/[certificate-id]</p>
     </div>
   );
 }

@@ -1,4 +1,16 @@
 import type { FeedType } from "@prisma/client";
+import { enumLabel } from "@/lib/utils";
+
+/**
+ * Display label for a feed type. The underlying `COURSE` enum value, model
+ * names (`CourseModule`, etc.), and routes are unchanged — this only affects
+ * what users read, matching the "Program" vocabulary the marketing site
+ * already uses instead of "Course".
+ */
+export function feedTypeLabel(type: FeedType): string {
+  if (type === "COURSE") return "Program";
+  return enumLabel(type);
+}
 
 export type FeedActionKind =
   | "quiz"
@@ -55,7 +67,7 @@ export function getFeedActionLabel(type: FeedType): string {
     case "JOB_POSTING":
       return "View job";
     case "COURSE":
-      return "View course";
+      return "View program";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":

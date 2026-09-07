@@ -45,12 +45,12 @@ export default async function AdminTrainerProgramPage() {
         <Link href="/admin" className="text-sm font-semibold text-teal-700">← Administration</Link>
         <h1 className="mt-2 text-3xl font-bold">Trainer Program</h1>
         <p className="mt-1 max-w-2xl text-slate-500">
-          Course modules, trainer assignments, proposals, teach requests, deliverables, and payouts.
+          Program modules, trainer assignments, proposals, teach requests, deliverables, and payouts.
         </p>
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-bold">Course modules</h2>
+        <h2 className="text-lg font-bold">Program modules</h2>
         <div className="grid gap-3">
           {courses.map((course) => {
             const courseModules = modulesByCourse.get(course.id) ?? [];

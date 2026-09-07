@@ -16,9 +16,9 @@ export default async function AdminCourseEnrollmentsPage() {
     <div className="space-y-6">
       <div>
         <Link href="/admin" className="text-sm font-semibold text-teal-700">← Administration</Link>
-        <h1 className="mt-2 text-3xl font-bold">Course Enrollments</h1>
+        <h1 className="mt-2 text-3xl font-bold">Program Enrollments</h1>
         <p className="mt-1 max-w-2xl text-slate-500">
-          Course fees are paid off-platform — enroll a student here once payment is confirmed to unlock that course&apos;s modules for them.
+          Program fees are paid off-platform — enroll a student here once payment is confirmed to unlock that program&apos;s modules for them.
         </p>
       </div>
 

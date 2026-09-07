@@ -18,9 +18,9 @@ export default async function ProfilePage() {
     <div className="mx-auto max-w-3xl space-y-7">
       <div>
         <p className="text-sm font-semibold text-teal-700">Your profile</p>
-        <h1 className="mt-1 text-3xl font-bold">Course advising details</h1>
+        <h1 className="mt-1 text-3xl font-bold">Program advising details</h1>
         <p className="mt-2 text-slate-500">
-          A few details help career officers recommend the right learning paths and courses.
+          A few details help career officers recommend the right learning paths and programs.
         </p>
       </div>
 

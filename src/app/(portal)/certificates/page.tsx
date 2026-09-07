@@ -19,11 +19,11 @@ export default async function CertificatesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h1 className="text-3xl font-bold">Certificates</h1><p className="mt-1 text-slate-500">Verified course completion records.</p></div>
+        <div><h1 className="text-3xl font-bold">Certificates</h1><p className="mt-1 text-slate-500">Verified program completion records.</p></div>
         {user.role.key === "ADMIN" && <ResourceCreateForm title="Issue certificate" endpoint="/api/v1/certificates" fields={[
           { name: "learnerId", label: "Learner", type: "select", required: true, options: learners.map((item) => ({ value: item.id, label: item.fullName })) },
           { name: "learnerName", label: "Name on certificate", required: true },
-          { name: "courseName", label: "Course name", required: true },
+          { name: "courseName", label: "Program name", required: true },
           { name: "issueDate", label: "Issue date", type: "date", required: true, defaultValue: new Date().toISOString().slice(0, 10) },
         ]} />}
       </div>

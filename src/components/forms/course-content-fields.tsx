@@ -174,7 +174,7 @@ export function CourseContentFields({
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
-      <span className="block text-sm font-medium">Course details</span>
+      <span className="block text-sm font-medium">Program details</span>
       <input type="hidden" name={name} value={toContentJson(state)} />
 
       <label className="block">
@@ -260,7 +260,7 @@ export function CourseContentFields({
               </span>
               {benefits.length === 0 ? (
                 <p className="text-xs text-slate-400">
-                  No benefits created yet — add one from Admin &gt; Course Benefits.
+                  No benefits created yet — add one from Admin &gt; Program Benefits.
                 </p>
               ) : (
                 <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 p-2 dark:border-slate-800">

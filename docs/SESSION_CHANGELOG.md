@@ -1,9 +1,9 @@
 # MCG Learn — Session Changelog
 
-**Date:** 2026-09-03 (updated — see §18–22 for this update)
-**Period:** 2026-08-01 → 2026-09-03
-**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system, content sources, session scheduling, appointment booking, real in-app purchasing, full trainer program
-**Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI. §18–22 were verified the same way against the local dev server (real browser click-throughs plus DB-level assertions); commit status for each is noted explicitly since not everything below has been pushed yet.
+**Date:** 2026-09-06 (updated — see §24–25 for this update)
+**Period:** 2026-08-01 → 2026-09-06
+**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system, content sources, session scheduling, appointment booking, real in-app purchasing, full trainer program, course enrollment gating, onboarding UI
+**Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI. §18–25 were verified the same way against the local dev server (real browser click-throughs plus DB-level assertions); commit status for each is noted explicitly since not everything below has been pushed yet.
 
 ---
 
@@ -291,7 +291,7 @@ Verified live against a real public RSS feed (fetched 10 real posts, imported on
 
 ---
 
-## 19. Session scheduling: Free Session / Webinar / Class (uncommitted)
+## 19. Session scheduling: Free Session / Webinar / Class (committed `aa64f17`)
 
 The prior `WEBINAR` feed type was a single fixed date/time with a plain-text location field, manually edited as raw JSON. Reworked into a proper scheduling primitive, still using the same `FeedItem`/JSON-content storage (no migration needed for this one):
 
@@ -304,7 +304,7 @@ Verified live: created a real Free Session (Google Meet link, future date) throu
 
 ---
 
-## 20. Appointments: 1:1 booking, recurring availability, and notifications (uncommitted)
+## 20. Appointments: 1:1 booking, recurring availability, and notifications (committed `aa64f17`)
 
 Prompted by: "can this handle free one-to-one sessions based on available slots?" — the existing Sessions feature (§19) is broadcast (one time slot, many registrants); this is real slot-based booking, one learner per slot, for Career Officers and Trainers.
 
@@ -324,7 +324,7 @@ Prompted by: "can this handle free one-to-one sessions based on available slots?
 
 ---
 
-## 21. Real in-app purchasing: Razorpay, paid learning paths, bundles (uncommitted)
+## 21. Real in-app purchasing: Razorpay, paid learning paths, bundles (committed `aa64f17`)
 
 Prompted by wanting to know if the app could handle individual-topic or package purchases — it couldn't (zero payment code existed anywhere). This is a genuine reversal of the platform's "free content, paid programs happen off-platform" positioning for whichever specific paths get priced, done deliberately after confirming that's actually wanted.
 
@@ -338,7 +338,7 @@ Verified live end-to-end with simulated `PAID` purchase rows (no real Razorpay c
 
 ---
 
-## 22. Trainer Program: modules, assignments, proposals, sessions, deliverables, payouts (uncommitted)
+## 22. Trainer Program: modules, assignments, proposals, sessions, deliverables, payouts (committed `aa64f17`)
 
 The `Trainer` model was previously just a directory profile (free-text specializations, free-text availability, admin manually flips a status). Built out into a full program covering topic assignment and four distinct, independently-configurable compensation models — the largest single feature this session.
 
@@ -367,15 +367,45 @@ Verified live end-to-end with a real (temporarily role-switched) test trainer ac
 
 **Deliberately deferred, not built**: a shared cross-trainer content library (discussed and scoped, but held back — the trainer program has zero real trainers on it yet, and a content marketplace needs real supply-and-demand to be worth building rather than being a bet on demand that might not show up). The current architecture supports adding it later purely additively (a new table plus one optional column), without revisiting anything shipped here.
 
+**Product questions worked through without a code change, worth recording:**
+- *"Can trainers build entire courses?"* — No, and checking the code surfaced a real half-built path: a trainer's proposal form offers "new course" as an option, but `decideProposal` always requires an admin-selected **existing** course — there's no path that actually creates a new `Course` FeedItem from a proposal. Course creation stays admin-only until that's built.
+- *"Can a trainer propose a standalone topic (a masterclass with no parent course)?"* — Not currently; `CourseModule.feedItemId` is mandatory. The underlying propose → assign → log-session → confirm → payout mechanism doesn't care whether there's a parent course, so this is a nullable-FK-plus-a-discovery-page addition (likely surfacing via `/sessions`), not a rearchitecture.
+- *"Is there a content-verification step?"* — Partial. Deliverables do have a real admin approve/reject/needs-revision gate before payment. But approving a deliverable doesn't attach its file as a module's live `contentUrl` — there's no UI path connecting "content approved" to "content is now what students see," even though the underlying update API for it already exists.
+- *Moodle integration* — not needed; MCG-Learn already is a self-contained LMS (quizzes, progress, certificates, payments, compensation), and bolting on Moodle would mean syncing two systems or migrating off everything built this session, for a gap (course enrollment gating) that turned out to need only a small addition — see §24.
+- *A wallet (for trainer payouts / learner credit)* — assessed and intentionally not built yet: with zero live Razorpay transactions and zero real trainer payouts processed so far, there's no real friction yet to justify it. Revisit once the manual "admin marks each payout paid individually" step is a demonstrated, repeated chore rather than a guess.
+
 ---
 
-## 23. Known gaps (current, 2026-09-03)
+## 24. Course enrollments: gate a course's modules behind actual enrollment (committed `aa64f17`)
 
-Carried forward from §17 (still true): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented, course fee on non-priced display still free text, feed-card spacing intervals hardcoded.
+Found while answering "after content is verified, how do students access it?" — course modules (§22) rendered for **any** logged-in user who could view the course page, with no purchase or enrollment check at all. Since course fees are paid off-platform (a variant's CTA is an external link or lead-capture form, not Razorpay — unlike Learning Paths, which do have real purchase gating), nothing was stopping any registered user from completing `PER_STUDENT_USE` content and generating trainer payouts on a course they never paid for.
 
-New since §17:
-- Content Sources: Instagram fetcher is code-complete but untested live (needs a real Meta Business App + token from the account owner)
-- Appointments: no email/SMS/WhatsApp actually sends yet (needs real Resend + Meta WhatsApp credentials); "Generate more weeks" extends from *today*, not from the last-generated slot, so clicking it twice in quick succession correctly produces zero new slots rather than actually extending further — fine for real usage (time will have passed by the next real click) but worth knowing
-- Purchasing: no real Razorpay keys configured anywhere yet — checkout fails gracefully with a clear message rather than silently
-- Trainer Program: payout proof-of-payment is a plain reference string, not a file-upload/attachment flow like the referral-commission payments have; no shared content library across trainers yet (see §22)
-- None of §19–22 have been pushed to the remote repository as of this writing — committed features stop at `0ea8fc9`/`1480f30`
+- **`CourseEnrollment`** (user × course, `enrolledAt`) mirrors the existing `PartnerCandidate.enrolledAt` convention already used for job-board access, rather than inventing a payment-shaped concept for something that isn't paid in-app
+- Admin records enrollment once payment is confirmed off-platform, from a new `/admin/course-enrollments` page (one course per card, enroll-by-email, list of current enrollees with unenroll)
+- The course page's Modules section now shows a lock icon and an "Enroll to unlock" message instead of content links/mark-complete buttons when the viewer isn't enrolled (admin previewing bypasses this, matching the existing DRAFT-preview convention)
+- The gate is enforced in `markModuleComplete` itself, not just hidden in the UI — the same principle already applied to Learning Path content pages, so calling the completion API directly can't bypass it
+
+Verified live: an unenrolled learner saw the lock state and locked icons on a real course page; enrolling them (and separately, replaying the exact enrollment-check query in both directions) correctly flipped access on and back off; the test module was live on the shared dev/production database mid-verification and was caught and deleted before this was documented, since local dev and prod share one database.
+
+---
+
+## 25. Onboarding: "New" nav badges + a real Getting Started checklist (uncommitted)
+
+Prompted by wanting tooltip/tour-style guidance "modern sites use," given how much shipped in one window that existing users won't know exists yet. Scoped down to the two cheapest, highest-value pieces rather than a full guided product tour:
+
+- **"New" badges** — a small gradient pill on recently-added nav items (Bundles, My Purchases, Sessions, Appointments, My Availability, Trainer Portal, My Sessions) until a user opens that section once. Tracked per-browser in `localStorage` (`lib/visited-nav.ts`) — no schema change, no server round-trip, consistent with how this app already treats this class of per-viewer cosmetic state.
+- **Getting Started checklist** — a dashboard card (Learner role only, mirroring the existing "Complete your advising profile" card's placement and style) with 5 milestones, each backed by a real signal rather than a fake progress bar: profile completeness and appointment-booked come from the database directly; learning-path-started reuses stats the dashboard already computes; feed-explored and sessions-checked reuse the same visited-hrefs tracking as the nav badges. Disappears once all 5 are done.
+
+**Bug found and fixed during this build**: the checklist's "Explore the Learning Feed" item never checked off, because `/feed` isn't itself a "New" nav item and the visit-recording effect only fired for hrefs in the New-badge list. Fixed by tracking a superset (`TRACKED_HREFS`) for recording visits, separate from the narrower list that actually renders a badge — caught live (visited `/feed`, checklist stayed at the wrong count) before being reported as done.
+
+Verified live: badges appear on first load and disappear after each section is opened once; the checklist's count moved from 0/5 to correctly reflect real state as each milestone was met, including the feed-tracking fix.
+
+---
+
+## 26. Known gaps (current, 2026-09-06)
+
+Carried forward from §23 (still true): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented, course fee on non-priced display still free text, feed-card spacing intervals hardcoded, Content Sources' Instagram fetcher untested live, Appointments' notifications need real Resend/Meta credentials, Purchasing needs real Razorpay keys, Trainer Program's payout proof is a plain reference string with no shared content library yet.
+
+New since §23:
+- Trainer Program: no path for a trainer to create a brand-new course (only modules under existing ones); no standalone (course-less) topics/masterclasses; approving a content deliverable doesn't yet attach it as a module's live content — three related, scoped gaps recorded in §22's product-questions note above
+- Onboarding: §25 (New badges + Getting Started checklist) is not yet pushed to the remote — committed features currently stop at `aa64f17`

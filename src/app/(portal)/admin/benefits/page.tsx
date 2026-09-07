@@ -27,11 +27,11 @@ export default async function AdminBenefitsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link href="/admin" className="text-sm font-semibold text-teal-700">← Administration</Link>
-          <h1 className="mt-2 text-3xl font-bold">Course Benefits</h1>
+          <h1 className="mt-2 text-3xl font-bold">Program Benefits</h1>
           <p className="mt-1 max-w-2xl text-slate-500">
             Coupons, scholarships, and other perks — created once here, then mapped onto specific
-            course tiers/modes from the course&rsquo;s edit form. Each auto-expires on its own
-            schedule without needing to touch the course itself.
+            program tiers/modes from the program&rsquo;s edit form. Each auto-expires on its own
+            schedule without needing to touch the program itself.
           </p>
         </div>
         <BenefitForm />

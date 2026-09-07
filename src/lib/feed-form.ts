@@ -1,4 +1,5 @@
 import { enumLabel } from "@/lib/utils";
+import { feedTypeLabel } from "@/lib/feed-actions";
 import type { FormField } from "@/types/resource";
 
 const feedTypes = [
@@ -52,7 +53,7 @@ export function feedItemFormFields(
       label: "Type",
       type: "select",
       required: true,
-      options: feedTypes.map((value) => ({ value, label: enumLabel(value) })),
+      options: feedTypes.map((value) => ({ value, label: feedTypeLabel(value) })),
     },
     { name: "externalUrl", label: "External URL", type: "url" },
     {

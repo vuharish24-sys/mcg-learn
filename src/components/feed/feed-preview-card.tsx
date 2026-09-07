@@ -1,6 +1,6 @@
 import { Briefcase, GraduationCap, Gift, CalendarDays } from "lucide-react";
-import { enumLabel, formatDate } from "@/lib/utils";
-import { parseFeedContent, SESSION_TYPE_LABEL } from "@/lib/feed-actions";
+import { formatDate } from "@/lib/utils";
+import { parseFeedContent, SESSION_TYPE_LABEL, feedTypeLabel } from "@/lib/feed-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { FeedActionButton } from "@/components/feed/feed-action-button";
@@ -78,14 +78,14 @@ export function FeedPreviewCard({ item, hasBenefit }: { item: FeedCardItem; hasB
               </Badge>
             ) : isCourse ? (
               <Badge className="gap-1 bg-sky-600 text-white shadow-sm">
-                <GraduationCap className="size-3" /> Course
+                <GraduationCap className="size-3" /> Program
               </Badge>
             ) : isSession ? (
               <Badge className="gap-1 bg-teal-600 text-white shadow-sm">
                 <CalendarDays className="size-3" /> {SESSION_TYPE_LABEL[session?.sessionType ?? "WEBINAR"]}
               </Badge>
             ) : (
-              <Badge className="bg-white/95 text-teal-900 shadow-sm">{enumLabel(item.type)}</Badge>
+              <Badge className="bg-white/95 text-teal-900 shadow-sm">{feedTypeLabel(item.type)}</Badge>
             )}
             {item.isFeatured && <Badge className="bg-amber-100 text-amber-900 shadow-sm">Featured</Badge>}
             {job?.closesAt && (

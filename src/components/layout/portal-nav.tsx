@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getVisitedHrefs, markHrefVisited } from "@/lib/visited-nav";
 import {
   Award,
   BookOpen,
@@ -39,6 +41,11 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Recently shipped sections — flagged "New" in the nav until a user opens them once. */
+const NEW_ITEM_HREFS = ["/bundles", "/my-purchases", "/sessions", "/appointments", "/my-availability", "/trainer-portal", "/my-sessions"];
+/** Every href whose visit gets recorded — a superset of NEW_ITEM_HREFS, since the dashboard's Getting Started checklist also reads "/feed" even though it's not itself a "New" item. */
+const TRACKED_HREFS = [...NEW_ITEM_HREFS, "/feed"];
+
 export function PortalNav({
   role,
   userName,
@@ -52,6 +59,19 @@ export function PortalNav({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [visited, setVisited] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setVisited(getVisitedHrefs());
+  }, []);
+
+  useEffect(() => {
+    const matched = TRACKED_HREFS.find((href) => isActivePath(pathname, href));
+    if (!matched) return;
+    markHrefVisited(matched);
+    setVisited((current) => (current.has(matched) ? current : new Set(current).add(matched)));
+  }, [pathname]);
+
   const items: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: [] },
     { href: "/profile", label: "Profile", icon: UserCircle, roles: [] },
@@ -94,6 +114,7 @@ export function PortalNav({
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
           {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);
+            const isNew = NEW_ITEM_HREFS.includes(href) && !visited.has(href);
             return (
               <Link
                 key={href}
@@ -107,6 +128,11 @@ export function PortalNav({
                 )}
               >
                 <Icon className={cn("size-4", active && "text-teal-700 dark:text-teal-300")} /> {label}
+                {isNew && (
+                  <span className="ml-auto rounded-full bg-gradient-to-r from-teal-600 to-violet-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                    New
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -122,16 +148,18 @@ export function PortalNav({
       <div className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t bg-white px-2 py-1 md:hidden dark:border-slate-800 dark:bg-slate-950">
         {visibleItems.slice(0, 5).map(({ href, label, icon: Icon }) => {
           const active = isActivePath(pathname, href);
+          const isNew = NEW_ITEM_HREFS.includes(href) && !visited.has(href);
           return (
             <Link
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-w-20 flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[10px] transition-colors",
+                "relative flex min-w-20 flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[10px] transition-colors",
                 active ? "text-teal-700 dark:text-teal-300" : "text-slate-600 dark:text-slate-400",
               )}
             >
+              {isNew && <span className="absolute right-4 top-1 size-1.5 rounded-full bg-violet-600" />}
               <Icon className="size-5" /> {label}
             </Link>
           );

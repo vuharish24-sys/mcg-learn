@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, Circle, Lock } from "lucide-react";
 import { feedItemImageUrl } from "@/lib/learning-path-media";
-import { enumLabel } from "@/lib/utils";
+import { feedTypeLabel } from "@/lib/feed-actions";
 import { Badge } from "@/components/ui/badge";
 import { MediaCover } from "@/components/ui/media-cover";
 import type { FeedType } from "@prisma/client";
@@ -37,7 +37,7 @@ export function PathCurriculumRow({
   const imageUrl = feedItemImageUrl(feedItem);
   const title = feedItem.previewTitle || feedItem.title;
   const meta = [
-    enumLabel(feedItem.type),
+    feedTypeLabel(feedItem.type),
     isRequired ? "Required" : "Optional",
     bestScore != null ? `Best ${bestScore}%` : null,
   ]
@@ -70,7 +70,7 @@ export function PathCurriculumRow({
         <div className="flex flex-wrap items-center gap-2">
           <p className="line-clamp-2 text-sm font-semibold leading-snug sm:text-base">{title}</p>
           <Badge className="border border-slate-200 bg-transparent text-slate-600 dark:border-slate-700">
-            {enumLabel(feedItem.type)}
+            {feedTypeLabel(feedItem.type)}
           </Badge>
           {feedItem.previewSiteName && (
             <span className="hidden text-xs text-slate-400 sm:inline">{feedItem.previewSiteName}</span>

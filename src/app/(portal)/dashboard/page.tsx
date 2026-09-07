@@ -16,12 +16,14 @@ import {
   BadgeIndianRupee,
 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getDashboardData } from "@/services/dashboard.service";
 import { feedService } from "@/services/feed.service";
 import { getProfileCompleteness } from "@/services/profile.service";
 import { referralCommissionService } from "@/services/referral-commission.service";
 import { Card, CardContent } from "@/components/ui/card";
 import { DashboardLearningTabs } from "@/components/dashboard/dashboard-learning-tabs";
+import { GettingStartedChecklist } from "@/components/dashboard/getting-started-checklist";
 import { buttonVariants } from "@/components/ui/button";
 import { enumLabel } from "@/lib/utils";
 
@@ -133,6 +135,15 @@ export default async function DashboardPage() {
     isAdminLike ? undefined : user.id,
   );
 
+  const pathsStarted =
+    user.role.key === "LEARNER"
+      ? ((data.learnerLearningStats?.pathsInProgress ?? 0) + (data.learnerLearningStats?.pathsCompleted ?? 0)) > 0
+      : false;
+  const hasBookedAppointment =
+    user.role.key === "LEARNER"
+      ? (await prisma.appointment.count({ where: { learnerId: user.id } })) > 0
+      : false;
+
   return (
     <div className="space-y-6 sm:space-y-7">
       <div className="relative overflow-hidden rounded-3xl border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-violet-50 p-6 dark:border-teal-950 dark:from-teal-950/30 dark:via-slate-900 dark:to-violet-950/20 sm:p-8">
@@ -173,6 +184,14 @@ export default async function DashboardPage() {
             </Link>
           </CardContent>
         </Card>
+      )}
+
+      {user.role.key === "LEARNER" && (
+        <GettingStartedChecklist
+          advisingReady={advisingReady}
+          pathsStarted={pathsStarted}
+          hasBookedAppointment={hasBookedAppointment}
+        />
       )}
 
       {(commissionSummary.totalEarned > 0 || isAdminLike) && (
