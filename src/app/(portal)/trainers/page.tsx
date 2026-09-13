@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, fieldClassName } from "@/components/ui/input";
 import { ResourceCreateForm } from "@/components/forms/resource-create-form";
 import { StatusSelect } from "@/components/forms/status-select";
+import { RequestTutorSessionForm } from "@/components/trainer-program/request-tutor-session-form";
 
 const statuses = ["ACTIVE", "INACTIVE", "PENDING"];
 
@@ -15,7 +16,7 @@ export default async function TrainersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireRole(["ADMIN", "TRAINER", "CAREER_OFFICER"]);
+  const user = await requireRole(["ADMIN", "TRAINER", "CAREER_OFFICER", "LEARNER"]);
   const query = await searchParams;
   const search = typeof query.search === "string" ? query.search : undefined;
   const status = typeof query.status === "string" ? query.status : undefined;
@@ -24,7 +25,17 @@ export default async function TrainersPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h1 className="text-3xl font-bold">Trainer Network</h1><p className="mt-1 text-slate-500">Qualified trainers and their availability.</p></div>
+        <div>
+          <h1 className="text-3xl font-bold">Trainer Network</h1>
+          <p className="mt-1 text-slate-500">Qualified trainers and their availability.</p>
+          {user.role.key === "LEARNER" && (
+            <p className="mt-1 text-sm text-slate-400">
+              Requesting a session here is separate from any scheduled classes you already have as
+              part of an enrolled program — this is a paid, on-demand 1:1 with the trainer of your
+              choice, priced per request.
+            </p>
+          )}
+        </div>
         {user.role.key === "ADMIN" && <ResourceCreateForm title="Add trainer" endpoint="/api/v1/trainers" fields={[
           { name: "fullName", label: "Full name", required: true },
           { name: "email", label: "Email", type: "email", required: true },
@@ -48,6 +59,11 @@ export default async function TrainersPage({
             <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-600">{trainer.bio ?? "Professional trainer profile"}</p>
             <div className="mt-4 flex flex-wrap gap-2">{trainer.specializations.map((item) => <Badge key={item}>{item}</Badge>)}</div>
             <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-4 text-sm dark:border-slate-800"><div><p className="text-xs text-slate-500">Experience</p><p className="font-semibold">{trainer.experienceYears} years</p></div><div><p className="text-xs text-slate-500">Availability</p><p className="font-semibold">{trainer.availability}</p></div></div>
+            {user.role.key === "LEARNER" && trainer.status === "ACTIVE" && (
+              <div className="mt-4 border-t pt-4 dark:border-slate-800">
+                <RequestTutorSessionForm trainerId={trainer.id} />
+              </div>
+            )}
           </CardContent></Card>
         ))}
       </div>

@@ -1,0 +1,30 @@
+# Host Apache vhost — reverse proxies the Moodle subdomain to the Docker
+# container's loopback-only published port. Copy to
+# /etc/apache2/sites-available/lms.conf on the server and replace
+# YOUR_SUBDOMAIN before enabling.
+#
+# Requires: sudo a2enmod proxy proxy_http headers rewrite ssl
+
+<VirtualHost *:80>
+    ServerName YOUR_SUBDOMAIN
+
+    # Deliberately NOT "ProxyPreserveHost On": Moodle's reverseproxy check
+    # (lib/setuplib.php) throws "reverseproxyabused" if the Host header it
+    # receives matches $CFG->wwwroot's host exactly — it expects the proxy
+    # to forward using its own internal name (here, 127.0.0.1:8091), not
+    # preserve the public one. Confirmed by hitting this error on a real
+    # deploy: https://github.com/moodle/moodle/blob/MOODLE_405_STABLE/lib/setuplib.php
+    ProxyRequests Off
+    ProxyPass / http://127.0.0.1:8091/
+    ProxyPassReverse / http://127.0.0.1:8091/
+    RequestHeader set X-Forwarded-Proto "http"
+
+    ErrorLog ${APACHE_LOG_DIR}/lms-error.log
+    CustomLog ${APACHE_LOG_DIR}/lms-access.log combined
+</VirtualHost>
+
+# After `certbot --apache -d YOUR_SUBDOMAIN` runs, it will generate a
+# matching :443 block below (or in a separate -le-ssl.conf file) copying
+# these ProxyPass directives. Open that generated block afterward and change
+# X-Forwarded-Proto from "http" to "https" — certbot won't know to do that
+# for you, and Moodle needs it correct to generate https:// links.

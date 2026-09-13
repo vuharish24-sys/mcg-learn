@@ -131,8 +131,30 @@ export const availabilityRuleGenerateSchema = z.object({
 });
 
 export const purchaseCheckoutSchema = z.object({
-  purchasableType: z.enum(["LEARNING_PATH", "BUNDLE"]),
+  purchasableType: z.enum(["LEARNING_PATH", "BUNDLE", "MOODLE_COURSE", "TUTOR_SESSION"]),
   id: z.string().min(1),
+});
+
+export const tutorSessionRequestSchema = z.object({
+  trainerId: z.string().min(1),
+  topic: z.string().min(3).max(200),
+  preferredAt: z.coerce.date(),
+  durationMinutes: z.coerce.number().int().min(15).max(240),
+});
+
+export const tutorSessionPriceSchema = z.object({
+  priceAmountPaise: z.coerce.number().int().min(100),
+});
+
+export const moodleCourseMappingSchema = z.object({
+  moodleCourseId: z.coerce.number().int().min(1),
+  moodleCourseIdNumber: z.string().nullish(),
+  // Bare Tool URL only — Moodle validates it byte-for-byte against the
+  // registered redirect URI and rejects one with a query string.
+  targetLinkUri: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+  ltiCustomParams: z.string().nullish(),
+  priceInPaise: z.coerce.number().int().min(0),
+  isActive: z.coerce.boolean().optional(),
 });
 
 export const purchaseVerifySchema = z.object({

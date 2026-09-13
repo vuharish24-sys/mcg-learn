@@ -22,9 +22,15 @@ enum FeedType {
   INTERNAL_PROMOTION
   JOB_POSTING
   COURSE
+  /**
+   * A self-paced course actually delivered on the self-hosted Moodle LMS, launched via LTI. Distinct from COURSE (an off-platform, manually-enrolled program).
+   */
+  MOODLE_COURSE
 }
 
-/** Where a feed item is allowed to render. FEED = today's default (main feed). */
+/**
+ * Where a feed item is allowed to render. FEED = today's default (main feed).
+ */
 enum FeedPlacement {
   FEED
   LEARNING_PATH_LIST
@@ -171,7 +177,9 @@ enum UserLearningStatus {
   COMPLETED
 }
 
-/** What a learner receives when they complete a LearningPath. */
+/**
+ * What a learner receives when they complete a LearningPath.
+ */
 enum LearningPathRewardType {
   CERTIFICATE
   BADGE
@@ -227,52 +235,53 @@ model RolePermission {
 }
 
 model User {
-  id            String        @id @db.Uuid
-  email         String        @unique
-  fullName      String        @map("full_name")
-  avatarUrl     String?       @map("avatar_url")
-  phone         String?
-  dateOfBirth   DateTime?     @map("date_of_birth") @db.Date
-  qualification String?
-  fieldOfStudy  String?       @map("field_of_study")
-  yearsExperience Int?        @map("years_experience")
-  careerGoal    String?       @map("career_goal")
-  preferredLearningMode String? @map("preferred_learning_mode")
-  city          String?
-  country       String?
-  advisingNotes String?       @map("advising_notes")
-  roleId        String        @map("role_id")
-  role          Role          @relation(fields: [roleId], references: [id])
-  isActive      Boolean       @default(true) @map("is_active")
-  assignedLeads Lead[]        @relation("AssignedOfficer")
-  trainer       Trainer?
-  referralsMade Referral[]    @relation("Referrer")
-  referredBy    Referral?     @relation("ReferredUser")
-  referralProfile ReferralProfile?
-  certificates       Certificate[]
-  badges             Badge[]
-  leadNotes          LeadNote[]
-  learningProgress   UserLearningProgress[]
-  pathItemCompletions UserPathItemCompletion[]
-  quizAttempts       QuizAttempt[]
-  commissionTxnsApproved ReferralCommissionTransaction[] @relation("CommissionApprovedBy")
-  commissionPaymentsPaid ReferralCommissionPayment[]     @relation("CommissionPaidBy")
-  commissionAuditEvents  ReferralCommissionAuditEvent[]  @relation("CommissionAuditActor")
-  campaignParticipations ReferralCampaignParticipant[]
-  referralMilestonesExtended ReferralMilestone[]         @relation("ReferralMilestoneExtendedBy")
-  campaignTermsAccepted  ReferralCampaignParticipant[]   @relation("CampaignTermsAcceptedBy")
-  paymentProofsUploaded  ReferralPaymentAttachment[]     @relation("PaymentProofUploadedBy")
-  campaignAuditEvents    ReferralCampaignAuditLog[]      @relation("CampaignAuditActor")
-  hostedAppointmentSlots AppointmentSlot[]               @relation("AppointmentSlotHost")
-  appointmentsBooked     Appointment[]                   @relation("AppointmentLearner")
-  availabilityRules      AvailabilityRule[]              @relation("AvailabilityRuleHost")
-  purchases              Purchase[]
-  classSessionAttendances ClassSessionAttendance[]
-  moduleCompletions      UserModuleCompletion[]
-  contentUsageEvents     ContentUsageEvent[]
-  courseEnrollments      CourseEnrollment[]
-  createdAt          DateTime      @default(now()) @map("created_at")
-  updatedAt          DateTime      @updatedAt @map("updated_at")
+  id                         String                          @id @db.Uuid
+  email                      String                          @unique
+  fullName                   String                          @map("full_name")
+  avatarUrl                  String?                         @map("avatar_url")
+  phone                      String?
+  dateOfBirth                DateTime?                       @map("date_of_birth") @db.Date
+  qualification              String?
+  fieldOfStudy               String?                         @map("field_of_study")
+  yearsExperience            Int?                            @map("years_experience")
+  careerGoal                 String?                         @map("career_goal")
+  preferredLearningMode      String?                         @map("preferred_learning_mode")
+  city                       String?
+  country                    String?
+  advisingNotes              String?                         @map("advising_notes")
+  roleId                     String                          @map("role_id")
+  role                       Role                            @relation(fields: [roleId], references: [id])
+  isActive                   Boolean                         @default(true) @map("is_active")
+  assignedLeads              Lead[]                          @relation("AssignedOfficer")
+  trainer                    Trainer?
+  referralsMade              Referral[]                      @relation("Referrer")
+  referredBy                 Referral?                       @relation("ReferredUser")
+  referralProfile            ReferralProfile?
+  certificates               Certificate[]
+  badges                     Badge[]
+  leadNotes                  LeadNote[]
+  learningProgress           UserLearningProgress[]
+  pathItemCompletions        UserPathItemCompletion[]
+  quizAttempts               QuizAttempt[]
+  commissionTxnsApproved     ReferralCommissionTransaction[] @relation("CommissionApprovedBy")
+  commissionPaymentsPaid     ReferralCommissionPayment[]     @relation("CommissionPaidBy")
+  commissionAuditEvents      ReferralCommissionAuditEvent[]  @relation("CommissionAuditActor")
+  campaignParticipations     ReferralCampaignParticipant[]
+  referralMilestonesExtended ReferralMilestone[]             @relation("ReferralMilestoneExtendedBy")
+  campaignTermsAccepted      ReferralCampaignParticipant[]   @relation("CampaignTermsAcceptedBy")
+  paymentProofsUploaded      ReferralPaymentAttachment[]     @relation("PaymentProofUploadedBy")
+  campaignAuditEvents        ReferralCampaignAuditLog[]      @relation("CampaignAuditActor")
+  hostedAppointmentSlots     AppointmentSlot[]               @relation("AppointmentSlotHost")
+  appointmentsBooked         Appointment[]                   @relation("AppointmentLearner")
+  availabilityRules          AvailabilityRule[]              @relation("AvailabilityRuleHost")
+  purchases                  Purchase[]
+  classSessionAttendances    ClassSessionAttendance[]
+  moduleCompletions          UserModuleCompletion[]
+  contentUsageEvents         ContentUsageEvent[]
+  courseEnrollments          CourseEnrollment[]
+  tutorSessionRequests       TutorSessionRequest[]
+  createdAt                  DateTime                        @default(now()) @map("created_at")
+  updatedAt                  DateTime                        @updatedAt @map("updated_at")
 
   @@index([roleId])
   @@map("users")
@@ -292,52 +301,71 @@ model FeedCategory {
 }
 
 model FeedItem {
-  id            String         @id @default(cuid())
-  title         String
-  description   String
-  thumbnailUrl  String?        @map("thumbnail_url")
-  categoryId    String         @map("category_id")
-  category      FeedCategory   @relation(fields: [categoryId], references: [id])
-  type          FeedType
-  externalUrl   String?        @map("external_url")
-  content       Json?
-  /** JOB_POSTING only: exclusive to this partner's board (+ any partner subscribed to it) instead of MCG's main feed. Null = global, visible everywhere, as with every other feed item. */
-  postedByPartnerId String?  @map("posted_by_partner_id")
-  postedByPartner   Partner? @relation(fields: [postedByPartnerId], references: [id], onDelete: SetNull)
-  previewTitle       String?   @map("preview_title")
-  previewDescription String?   @map("preview_description")
-  previewImageUrl    String?   @map("preview_image_url")
-  previewSiteName    String?   @map("preview_site_name")
-  previewFetchedAt   DateTime? @map("preview_fetched_at")
-  publishedAt   DateTime?      @map("published_at")
-  status        PublishStatus  @default(DRAFT)
-  priority      Int            @default(0)
-  isFeatured    Boolean        @default(false) @map("is_featured")
-  viewCount     Int            @default(0) @map("view_count")
-  placements    FeedPlacement[] @default([FEED])
-  /** The topic/prompt an admin gave the AI generator. Null for manually-authored items. */
-  generationTopic String? @map("generation_topic")
-  /** Groups multi-asset content series generated from one master topic. Null for one-off items. */
-  contentSeriesId String?        @map("content_series_id")
-  contentSeries   ContentSeries? @relation(fields: [contentSeriesId], references: [id], onDelete: SetNull)
-  /** This asset's specific angle within its content series, e.g. "Day 3 – ICD-10-CM vs CPT". */
-  seriesAngle     String?        @map("series_angle")
-  advertisement        Advertisement?
-  learningPathItems    LearningPathItem[]
-  requiredForPaths     LearningPath[]             @relation("RequiredQuizPath")
-  pathItemCompletions UserPathItemCompletion[]
-  quizAttempts         QuizAttempt[]
-  campaignFeedLinks    CampaignFeedLink[]
-  /** COURSE only: benefits (coupons/scholarships/perks) mapped onto this course's variants. */
-  courseVariantBenefits CourseVariantBenefit[]
-  /** Content-source imports (Admin > Content Sources) that were turned into this feed item. */
-  sourceItems           ContentSourceItem[]
-  /** COURSE only: content-structure modules trainers can be assigned to. */
-  courseModules         CourseModule[]       @relation("CourseModules")
-  trainerProposalsTargeting TrainerProposal[] @relation("ProposalTargetCourse")
-  enrollments           CourseEnrollment[]
-  createdAt            DateTime       @default(now()) @map("created_at")
-  updatedAt            DateTime       @updatedAt @map("updated_at")
+  id                        String                   @id @default(cuid())
+  title                     String
+  description               String
+  thumbnailUrl              String?                  @map("thumbnail_url")
+  categoryId                String                   @map("category_id")
+  category                  FeedCategory             @relation(fields: [categoryId], references: [id])
+  type                      FeedType
+  externalUrl               String?                  @map("external_url")
+  content                   Json?
+  /**
+   * JOB_POSTING only: exclusive to this partner's board (+ any partner subscribed to it) instead of MCG's main feed. Null = global, visible everywhere, as with every other feed item.
+   */
+  postedByPartnerId         String?                  @map("posted_by_partner_id")
+  postedByPartner           Partner?                 @relation(fields: [postedByPartnerId], references: [id], onDelete: SetNull)
+  previewTitle              String?                  @map("preview_title")
+  previewDescription        String?                  @map("preview_description")
+  previewImageUrl           String?                  @map("preview_image_url")
+  previewSiteName           String?                  @map("preview_site_name")
+  previewFetchedAt          DateTime?                @map("preview_fetched_at")
+  publishedAt               DateTime?                @map("published_at")
+  status                    PublishStatus            @default(DRAFT)
+  priority                  Int                      @default(0)
+  isFeatured                Boolean                  @default(false) @map("is_featured")
+  viewCount                 Int                      @default(0) @map("view_count")
+  placements                FeedPlacement[]          @default([FEED])
+  /**
+   * The topic/prompt an admin gave the AI generator. Null for manually-authored items.
+   */
+  generationTopic           String?                  @map("generation_topic")
+  /**
+   * Groups multi-asset content series generated from one master topic. Null for one-off items.
+   */
+  contentSeriesId           String?                  @map("content_series_id")
+  contentSeries             ContentSeries?           @relation(fields: [contentSeriesId], references: [id], onDelete: SetNull)
+  /**
+   * This asset's specific angle within its content series, e.g. "Day 3 – ICD-10-CM vs CPT".
+   */
+  seriesAngle               String?                  @map("series_angle")
+  advertisement             Advertisement?
+  learningPathItems         LearningPathItem[]
+  requiredForPaths          LearningPath[]           @relation("RequiredQuizPath")
+  pathItemCompletions       UserPathItemCompletion[]
+  quizAttempts              QuizAttempt[]
+  campaignFeedLinks         CampaignFeedLink[]
+  /**
+   * COURSE only: benefits (coupons/scholarships/perks) mapped onto this course's variants.
+   */
+  courseVariantBenefits     CourseVariantBenefit[]
+  /**
+   * Content-source imports (Admin > Content Sources) that were turned into this feed item.
+   */
+  sourceItems               ContentSourceItem[]
+  /**
+   * COURSE only: content-structure modules trainers can be assigned to.
+   */
+  courseModules             CourseModule[]           @relation("CourseModules")
+  trainerProposalsTargeting TrainerProposal[]        @relation("ProposalTargetCourse")
+  enrollments               CourseEnrollment[]
+  /**
+   * MOODLE_COURSE only: the Moodle-side course this FeedItem launches into.
+   */
+  moodleCourseMapping       MoodleCourseMapping?
+  purchases                 Purchase[]
+  createdAt                 DateTime                 @default(now()) @map("created_at")
+  updatedAt                 DateTime                 @updatedAt @map("updated_at")
 
   @@index([status, publishedAt])
   @@index([categoryId])
@@ -369,17 +397,17 @@ model ContentSeries {
  * AiProviderConfig) — null for RSS, which needs no credential.
  */
 model ContentSource {
-  id                String                @id @default(cuid())
-  name              String
-  platform          ContentSourcePlatform
-  handle            String
-  encryptedApiKey   String?               @map("encrypted_api_key")
-  isActive          Boolean               @default(true) @map("is_active")
-  lastFetchedAt     DateTime?             @map("last_fetched_at")
-  lastError         String?               @map("last_error")
-  items             ContentSourceItem[]
-  createdAt         DateTime              @default(now()) @map("created_at")
-  updatedAt         DateTime              @updatedAt @map("updated_at")
+  id              String                @id @default(cuid())
+  name            String
+  platform        ContentSourcePlatform
+  handle          String
+  encryptedApiKey String?               @map("encrypted_api_key")
+  isActive        Boolean               @default(true) @map("is_active")
+  lastFetchedAt   DateTime?             @map("last_fetched_at")
+  lastError       String?               @map("last_error")
+  items           ContentSourceItem[]
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
 
   @@map("content_sources")
 }
@@ -391,19 +419,19 @@ model ContentSource {
  * (`externalId`), so re-fetching only surfaces genuinely new items.
  */
 model ContentSourceItem {
-  id                  String                   @id @default(cuid())
-  sourceId            String                   @map("source_id")
-  source              ContentSource            @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  externalId          String                   @map("external_id")
-  title               String
-  description         String?
-  thumbnailUrl        String?                  @map("thumbnail_url")
-  externalUrl         String                   @map("external_url")
-  publishedAt         DateTime?                @map("published_at")
-  status              ContentSourceItemStatus  @default(NEW)
-  importedFeedItemId  String?                  @map("imported_feed_item_id")
-  importedFeedItem    FeedItem?                @relation(fields: [importedFeedItemId], references: [id], onDelete: SetNull)
-  createdAt           DateTime                 @default(now()) @map("created_at")
+  id                 String                  @id @default(cuid())
+  sourceId           String                  @map("source_id")
+  source             ContentSource           @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId         String                  @map("external_id")
+  title              String
+  description        String?
+  thumbnailUrl       String?                 @map("thumbnail_url")
+  externalUrl        String                  @map("external_url")
+  publishedAt        DateTime?               @map("published_at")
+  status             ContentSourceItemStatus @default(NEW)
+  importedFeedItemId String?                 @map("imported_feed_item_id")
+  importedFeedItem   FeedItem?               @relation(fields: [importedFeedItemId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                @default(now()) @map("created_at")
 
   @@unique([sourceId, externalId])
   @@index([status])
@@ -446,7 +474,9 @@ model AvailabilityRule {
   id                  String   @id @default(cuid())
   hostId              String   @map("host_id") @db.Uuid
   host                User     @relation("AvailabilityRuleHost", fields: [hostId], references: [id])
-  /** 0 = Sunday .. 6 = Saturday. */
+  /**
+   * 0 = Sunday .. 6 = Saturday.
+   */
   daysOfWeek          Int[]    @map("days_of_week")
   startTime           String   @map("start_time")
   endTime             String   @map("end_time")
@@ -481,7 +511,7 @@ model Lead {
   email             String?
   phone             String
   status            LeadStatus @default(NEW)
-  assignedOfficerId String?    @db.Uuid @map("assigned_officer_id")
+  assignedOfficerId String?    @map("assigned_officer_id") @db.Uuid
   assignedOfficer   User?      @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
   followUpAt        DateTime?  @map("follow_up_at")
   source            String
@@ -499,7 +529,7 @@ model LeadNote {
   id        String   @id @default(cuid())
   leadId    String   @map("lead_id")
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  authorId  String   @db.Uuid @map("author_id")
+  authorId  String   @map("author_id") @db.Uuid
   author    User     @relation(fields: [authorId], references: [id])
   body      String
   createdAt DateTime @default(now()) @map("created_at")
@@ -509,23 +539,24 @@ model LeadNote {
 }
 
 model Trainer {
-  id              String        @id @default(cuid())
-  userId          String?       @unique @db.Uuid @map("user_id")
-  user            User?         @relation(fields: [userId], references: [id])
-  fullName        String        @map("full_name")
-  email           String        @unique
+  id              String                  @id @default(cuid())
+  userId          String?                 @unique @map("user_id") @db.Uuid
+  user            User?                   @relation(fields: [userId], references: [id])
+  fullName        String                  @map("full_name")
+  email           String                  @unique
   phone           String?
   bio             String?
-  experienceYears Int           @default(0) @map("experience_years")
+  experienceYears Int                     @default(0) @map("experience_years")
   specializations String[]
   availability    String
-  status          TrainerStatus @default(PENDING)
+  status          TrainerStatus           @default(PENDING)
   assignments     TrainerAssignment[]
   proposals       TrainerProposal[]
   teachRequests   ModuleTeachRequest[]
   payoutLineItems TrainerPayoutLineItem[]
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  sessionRequests TutorSessionRequest[]
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("trainers")
@@ -597,21 +628,25 @@ model CourseEnrollment {
   @@map("course_enrollments")
 }
 
-/** A content-structure unit under a Course FeedItem — separate from the course's pricing `variants`. */
+/**
+ * A content-structure unit under a Course FeedItem — separate from the course's pricing `variants`.
+ */
 model CourseModule {
-  id            String                @id @default(cuid())
-  feedItemId    String                @map("feed_item_id")
-  feedItem      FeedItem              @relation("CourseModules", fields: [feedItemId], references: [id], onDelete: Cascade)
+  id            String                 @id @default(cuid())
+  feedItemId    String                 @map("feed_item_id")
+  feedItem      FeedItem               @relation("CourseModules", fields: [feedItemId], references: [id], onDelete: Cascade)
   title         String
   description   String?
-  /** Recorded video / study material link — completing this is what triggers PER_STUDENT_USE payouts. */
-  contentUrl    String?               @map("content_url")
-  sortOrder     Int                   @default(0) @map("sort_order")
+  /**
+   * Recorded video / study material link — completing this is what triggers PER_STUDENT_USE payouts.
+   */
+  contentUrl    String?                @map("content_url")
+  sortOrder     Int                    @default(0) @map("sort_order")
   assignments   TrainerAssignment[]
   teachRequests ModuleTeachRequest[]
   completions   UserModuleCompletion[]
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
 
   @@index([feedItemId])
   @@map("course_modules")
@@ -643,14 +678,18 @@ model TrainerAssignment {
   @@map("trainer_assignments")
 }
 
-/** Trainer-initiated: propose a new module (optionally under an existing course) instead of waiting to be assigned. */
+/**
+ * Trainer-initiated: propose a new module (optionally under an existing course) instead of waiting to be assigned.
+ */
 model TrainerProposal {
   id                       String                  @id @default(cuid())
   trainerId                String                  @map("trainer_id")
   trainer                  Trainer                 @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   title                    String
   description              String
-  /** Null = proposing content for a brand-new course, admin decides how to place it on approval. */
+  /**
+   * Null = proposing content for a brand-new course, admin decides how to place it on approval.
+   */
   targetCourseId           String?                 @map("target_course_id")
   targetCourse             FeedItem?               @relation("ProposalTargetCourse", fields: [targetCourseId], references: [id])
   proposedCompensationType TrainerCompensationType @map("proposed_compensation_type")
@@ -666,7 +705,9 @@ model TrainerProposal {
   @@map("trainer_proposals")
 }
 
-/** Trainer-initiated: request to teach an already-existing module (admin approves — the module has no separate "creator" concept to route to instead). */
+/**
+ * Trainer-initiated: request to teach an already-existing module (admin approves — the module has no separate "creator" concept to route to instead).
+ */
 model ModuleTeachRequest {
   id                       String                  @id @default(cuid())
   courseModuleId           String                  @map("course_module_id")
@@ -684,7 +725,9 @@ model ModuleTeachRequest {
   @@map("module_teach_requests")
 }
 
-/** One logged teaching occurrence — payable only once at least one attendee confirms. */
+/**
+ * One logged teaching occurrence — payable only once at least one attendee confirms.
+ */
 model ClassSession {
   id                  String                   @id @default(cuid())
   trainerAssignmentId String                   @map("trainer_assignment_id")
@@ -716,19 +759,21 @@ model ClassSessionAttendance {
   @@map("class_session_attendances")
 }
 
-/** A submitted piece of work (content, curriculum design, etc.) for a FLAT_PER_DELIVERABLE assignment. */
+/**
+ * A submitted piece of work (content, curriculum design, etc.) for a FLAT_PER_DELIVERABLE assignment.
+ */
 model Deliverable {
-  id                  String            @id @default(cuid())
-  trainerAssignmentId String            @map("trainer_assignment_id")
-  trainerAssignment   TrainerAssignment @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(cuid())
+  trainerAssignmentId String                 @map("trainer_assignment_id")
+  trainerAssignment   TrainerAssignment      @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
   title               String
   description         String?
-  fileUrl             String?           @map("file_url")
-  status              DeliverableStatus @default(SUBMITTED)
-  adminNotes          String?           @map("admin_notes")
+  fileUrl             String?                @map("file_url")
+  status              DeliverableStatus      @default(SUBMITTED)
+  adminNotes          String?                @map("admin_notes")
   payoutLineItem      TrainerPayoutLineItem?
-  createdAt           DateTime          @default(now()) @map("created_at")
-  updatedAt           DateTime          @updatedAt @map("updated_at")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
 
   @@index([trainerAssignmentId])
   @@map("deliverables")
@@ -746,16 +791,18 @@ model UserModuleCompletion {
   @@map("user_module_completions")
 }
 
-/** One student's first-time use of a PER_STUDENT_USE module — locks in the rate at the time it happened. */
+/**
+ * One student's first-time use of a PER_STUDENT_USE module — locks in the rate at the time it happened.
+ */
 model ContentUsageEvent {
-  id                  String            @id @default(cuid())
-  trainerAssignmentId String            @map("trainer_assignment_id")
-  trainerAssignment   TrainerAssignment @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
-  studentId           String            @map("student_id") @db.Uuid
-  student             User              @relation(fields: [studentId], references: [id])
-  amountPaise         Int               @map("amount_paise")
+  id                  String                 @id @default(cuid())
+  trainerAssignmentId String                 @map("trainer_assignment_id")
+  trainerAssignment   TrainerAssignment      @relation(fields: [trainerAssignmentId], references: [id], onDelete: Cascade)
+  studentId           String                 @map("student_id") @db.Uuid
+  student             User                   @relation(fields: [studentId], references: [id])
+  amountPaise         Int                    @map("amount_paise")
   payoutLineItem      TrainerPayoutLineItem?
-  createdAt           DateTime          @default(now()) @map("created_at")
+  createdAt           DateTime               @default(now()) @map("created_at")
 
   @@unique([trainerAssignmentId, studentId])
   @@map("content_usage_events")
@@ -769,84 +816,84 @@ model ContentUsageEvent {
  * full attachment-upload flow.
  */
 model TrainerPayoutLineItem {
-  id                  String            @id @default(cuid())
-  trainerId           String            @map("trainer_id")
-  trainer             Trainer           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  sourceType          PayoutSourceType  @map("source_type")
-  classSessionId      String?           @unique @map("class_session_id")
-  classSession        ClassSession?     @relation(fields: [classSessionId], references: [id])
-  deliverableId       String?           @unique @map("deliverable_id")
-  deliverable         Deliverable?      @relation(fields: [deliverableId], references: [id])
-  contentUsageEventId String?           @unique @map("content_usage_event_id")
+  id                  String             @id @default(cuid())
+  trainerId           String             @map("trainer_id")
+  trainer             Trainer            @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  sourceType          PayoutSourceType   @map("source_type")
+  classSessionId      String?            @unique @map("class_session_id")
+  classSession        ClassSession?      @relation(fields: [classSessionId], references: [id])
+  deliverableId       String?            @unique @map("deliverable_id")
+  deliverable         Deliverable?       @relation(fields: [deliverableId], references: [id])
+  contentUsageEventId String?            @unique @map("content_usage_event_id")
   contentUsageEvent   ContentUsageEvent? @relation(fields: [contentUsageEventId], references: [id])
-  amountPaise         Int               @map("amount_paise")
-  status              PayoutLineStatus  @default(PENDING)
-  approvedAt          DateTime?         @map("approved_at")
-  paidAt              DateTime?         @map("paid_at")
-  paymentReference    String?           @map("payment_reference")
-  createdAt           DateTime          @default(now()) @map("created_at")
+  amountPaise         Int                @map("amount_paise")
+  status              PayoutLineStatus   @default(PENDING)
+  approvedAt          DateTime?          @map("approved_at")
+  paidAt              DateTime?          @map("paid_at")
+  paymentReference    String?            @map("payment_reference")
+  createdAt           DateTime           @default(now()) @map("created_at")
 
   @@index([trainerId, status])
   @@map("trainer_payout_line_items")
 }
 
 model Referral {
-  id             String         @id @default(cuid())
-  referrerId     String         @db.Uuid @map("referrer_id")
-  referrer       User           @relation("Referrer", fields: [referrerId], references: [id])
-  referredUserId String?        @unique @db.Uuid @map("referred_user_id")
-  referredUser   User?          @relation("ReferredUser", fields: [referredUserId], references: [id])
-  code           String         @unique
-  referredEmail  String?        @map("referred_email")
-  referredPhone  String?        @map("referred_phone")
-  referredName   String?        @map("referred_name")
-  status         ReferralStatus @default(PENDING)
+  id                     String                          @id @default(cuid())
+  referrerId             String                          @map("referrer_id") @db.Uuid
+  referrer               User                            @relation("Referrer", fields: [referrerId], references: [id])
+  referredUserId         String?                         @unique @map("referred_user_id") @db.Uuid
+  referredUser           User?                           @relation("ReferredUser", fields: [referredUserId], references: [id])
+  code                   String                          @unique
+  referredEmail          String?                         @map("referred_email")
+  referredPhone          String?                         @map("referred_phone")
+  referredName           String?                         @map("referred_name")
+  status                 ReferralStatus                  @default(PENDING)
   commissionTransactions ReferralCommissionTransaction[]
   referralMilestones     ReferralMilestone[]
   campaignEnrollments    ReferralCampaignEnrollment[]
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  createdAt              DateTime                        @default(now()) @map("created_at")
+  updatedAt              DateTime                        @updatedAt @map("updated_at")
 
   @@index([referrerId])
   @@map("referrals")
 }
 
 model ReferralCampaign {
-  id                     String                   @id @default(cuid())
-  name                   String
-  shortTitle             String?                  @map("short_title")
-  description            String?
-  campaignCode           String                   @unique @map("campaign_code")
-  startsAt               DateTime                 @map("starts_at")
-  endsAt                 DateTime                 @map("ends_at")
-  registrationStartsAt   DateTime?                @map("registration_starts_at")
-  registrationEndsAt     DateTime?                @map("registration_ends_at")
-  referralStartsAt       DateTime?                @map("referral_starts_at")
-  referralEndsAt         DateTime?                @map("referral_ends_at")
-  status                 ReferralCampaignStatus   @default(DRAFT)
-  priority               Int                      @default(0)
-  maxReferrals           Int?                     @map("max_referrals")
-  isActive               Boolean                  @default(true) @map("is_active")
-  termsVersion           String                   @map("terms_version")
-  commissionType         ReferralCommissionType   @map("commission_type")
-  commissionBasis        ReferralCommissionBasis  @map("commission_basis")
-  publishAsFeed          Boolean                  @default(false) @map("publish_as_feed")
-  clonedFromId           String?                  @map("cloned_from_id")
-  clonedFrom             ReferralCampaign?        @relation("CampaignClones", fields: [clonedFromId], references: [id])
-  clones                 ReferralCampaign[]       @relation("CampaignClones")
-  milestones             ReferralCampaignMilestone[]
-  courses                ReferralCampaignCourse[]
-  transactions           ReferralCommissionTransaction[]
-  assets                 ReferralCampaignAsset[]
-  terms                  ReferralCampaignTerms[]
-  faqs                   ReferralCampaignFaq[]
-  participants           ReferralCampaignParticipant[]
-  enrollments            ReferralCampaignEnrollment[]
-  referralMilestones     ReferralMilestone[]
-  feedLinks              CampaignFeedLink[]
-  auditLogs              ReferralCampaignAuditLog[]
-  createdAt              DateTime                 @default(now()) @map("created_at")
-  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  id                   String                          @id @default(cuid())
+  name                 String
+  shortTitle           String?                         @map("short_title")
+  description          String?
+  campaignCode         String                          @unique @map("campaign_code")
+  startsAt             DateTime                        @map("starts_at")
+  endsAt               DateTime                        @map("ends_at")
+  registrationStartsAt DateTime?                       @map("registration_starts_at")
+  registrationEndsAt   DateTime?                       @map("registration_ends_at")
+  referralStartsAt     DateTime?                       @map("referral_starts_at")
+  referralEndsAt       DateTime?                       @map("referral_ends_at")
+  status               ReferralCampaignStatus          @default(DRAFT)
+  priority             Int                             @default(0)
+  maxReferrals         Int?                            @map("max_referrals")
+  isActive             Boolean                         @default(true) @map("is_active")
+  termsVersion         String                          @map("terms_version")
+  commissionType       ReferralCommissionType          @map("commission_type")
+  commissionBasis      ReferralCommissionBasis         @map("commission_basis")
+  publishAsFeed        Boolean                         @default(false) @map("publish_as_feed")
+  clonedFromId         String?                         @map("cloned_from_id")
+  clonedFrom           ReferralCampaign?               @relation("CampaignClones", fields: [clonedFromId], references: [id])
+  clones               ReferralCampaign[]              @relation("CampaignClones")
+  milestones           ReferralCampaignMilestone[]
+  courses              ReferralCampaignCourse[]
+  transactions         ReferralCommissionTransaction[]
+  assets               ReferralCampaignAsset[]
+  terms                ReferralCampaignTerms[]
+  faqs                 ReferralCampaignFaq[]
+  participants         ReferralCampaignParticipant[]
+  enrollments          ReferralCampaignEnrollment[]
+  referralMilestones   ReferralMilestone[]
+  feedLinks            CampaignFeedLink[]
+  auditLogs            ReferralCampaignAuditLog[]
+  createdAt            DateTime                        @default(now()) @map("created_at")
+  updatedAt            DateTime                        @updatedAt @map("updated_at")
 
   @@index([status, startsAt, endsAt])
   @@index([priority])
@@ -866,26 +913,26 @@ model ReferralCampaignCourse {
 }
 
 model ReferralCampaignMilestone {
-  id                String                    @id @default(cuid())
-  campaignId        String                    @map("campaign_id")
-  campaign          ReferralCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  name              String
-  sequence          Int
-  trigger           ReferralMilestoneTrigger
-  calculationType   ReferralMilestoneCalcType @map("calculation_type")
-  value             Decimal                   @db.Decimal(12, 4)
-  commissionBasis   ReferralCommissionBasis?  @map("commission_basis")
-  defaultDueDays    Int?                      @map("default_due_days")
-  defaultExpiryDays Int?                      @map("default_expiry_days")
-  allowOverride     Boolean                   @default(true) @map("allow_override")
-  allowExtension    Boolean                   @default(true) @map("allow_extension")
-  maxExtensionDays  Int?                      @map("max_extension_days")
-  autoExpire        Boolean                   @default(true) @map("auto_expire")
-  isActive          Boolean                   @default(true) @map("is_active")
-  transactions      ReferralCommissionTransaction[]
+  id                 String                          @id @default(cuid())
+  campaignId         String                          @map("campaign_id")
+  campaign           ReferralCampaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name               String
+  sequence           Int
+  trigger            ReferralMilestoneTrigger
+  calculationType    ReferralMilestoneCalcType       @map("calculation_type")
+  value              Decimal                         @db.Decimal(12, 4)
+  commissionBasis    ReferralCommissionBasis?        @map("commission_basis")
+  defaultDueDays     Int?                            @map("default_due_days")
+  defaultExpiryDays  Int?                            @map("default_expiry_days")
+  allowOverride      Boolean                         @default(true) @map("allow_override")
+  allowExtension     Boolean                         @default(true) @map("allow_extension")
+  maxExtensionDays   Int?                            @map("max_extension_days")
+  autoExpire         Boolean                         @default(true) @map("auto_expire")
+  isActive           Boolean                         @default(true) @map("is_active")
+  transactions       ReferralCommissionTransaction[]
   referralMilestones ReferralMilestone[]
-  createdAt         DateTime                  @default(now()) @map("created_at")
-  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  createdAt          DateTime                        @default(now()) @map("created_at")
+  updatedAt          DateTime                        @updatedAt @map("updated_at")
 
   @@unique([campaignId, sequence])
   @@index([campaignId, trigger])
@@ -893,18 +940,18 @@ model ReferralCampaignMilestone {
 }
 
 model ReferralCampaignAsset {
-  id         String                   @id @default(cuid())
-  campaignId String                   @map("campaign_id")
-  campaign   ReferralCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id         String                    @id @default(cuid())
+  campaignId String                    @map("campaign_id")
+  campaign   ReferralCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   assetType  ReferralCampaignAssetType @map("asset_type")
-  fileName   String                   @map("file_name")
-  fileUrl    String                   @map("file_url")
-  fileType   String?                  @map("file_type")
-  fileSize   Int?                     @map("file_size")
-  sortOrder  Int                      @default(0) @map("sort_order")
-  isActive   Boolean                  @default(true) @map("is_active")
-  createdAt  DateTime                 @default(now()) @map("created_at")
-  updatedAt  DateTime                 @updatedAt @map("updated_at")
+  fileName   String                    @map("file_name")
+  fileUrl    String                    @map("file_url")
+  fileType   String?                   @map("file_type")
+  fileSize   Int?                      @map("file_size")
+  sortOrder  Int                       @default(0) @map("sort_order")
+  isActive   Boolean                   @default(true) @map("is_active")
+  createdAt  DateTime                  @default(now()) @map("created_at")
+  updatedAt  DateTime                  @updatedAt @map("updated_at")
 
   @@index([campaignId, assetType])
   @@map("referral_campaign_assets")
@@ -942,20 +989,20 @@ model ReferralCampaignFaq {
 }
 
 model ReferralCampaignParticipant {
-  id               String                   @id @default(cuid())
-  campaignId       String                   @map("campaign_id")
-  campaign         ReferralCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  userId           String                   @db.Uuid @map("user_id")
-  user             User                     @relation(fields: [userId], references: [id])
-  status           ReferralParticipantStatus @default(ACTIVE)
-  termsAccepted    Boolean                  @map("terms_accepted")
-  termsVersion     String                   @map("terms_version")
-  acceptedAt       DateTime                 @map("accepted_at")
-  acceptedById     String                   @db.Uuid @map("accepted_by_id")
-  acceptedBy       User                     @relation("CampaignTermsAcceptedBy", fields: [acceptedById], references: [id])
-  joinedAt         DateTime                 @default(now()) @map("joined_at")
-  createdAt        DateTime                 @default(now()) @map("created_at")
-  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  id            String                    @id @default(cuid())
+  campaignId    String                    @map("campaign_id")
+  campaign      ReferralCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId        String                    @map("user_id") @db.Uuid
+  user          User                      @relation(fields: [userId], references: [id])
+  status        ReferralParticipantStatus @default(ACTIVE)
+  termsAccepted Boolean                   @map("terms_accepted")
+  termsVersion  String                    @map("terms_version")
+  acceptedAt    DateTime                  @map("accepted_at")
+  acceptedById  String                    @map("accepted_by_id") @db.Uuid
+  acceptedBy    User                      @relation("CampaignTermsAcceptedBy", fields: [acceptedById], references: [id])
+  joinedAt      DateTime                  @default(now()) @map("joined_at")
+  createdAt     DateTime                  @default(now()) @map("created_at")
+  updatedAt     DateTime                  @updatedAt @map("updated_at")
 
   @@unique([campaignId, userId])
   @@index([userId, status])
@@ -977,34 +1024,34 @@ model ReferralCampaignEnrollment {
 }
 
 model ReferralMilestone {
-  id                   String                    @id @default(cuid())
-  referralId           String                    @map("referral_id")
-  referral             Referral                  @relation(fields: [referralId], references: [id], onDelete: Cascade)
-  campaignId           String                    @map("campaign_id")
-  campaign             ReferralCampaign          @relation(fields: [campaignId], references: [id])
-  campaignMilestoneId  String                    @map("campaign_milestone_id")
-  campaignMilestone    ReferralCampaignMilestone @relation(fields: [campaignMilestoneId], references: [id])
-  name                 String
-  sequence             Int
-  trigger              ReferralMilestoneTrigger
-  calculationType      ReferralMilestoneCalcType @map("calculation_type")
-  value                Decimal                   @db.Decimal(12, 4)
-  commissionBasis      ReferralCommissionBasis   @map("commission_basis")
-  dueDate              DateTime?                 @map("due_date")
-  expiryDate           DateTime?                 @map("expiry_date")
-  unlockedAt           DateTime?                 @map("unlocked_at")
-  status               ReferralMilestoneStatus   @default(PENDING)
-  achievedAt           DateTime?                 @map("achieved_at")
-  approvedAt           DateTime?                 @map("approved_at")
-  paidAt               DateTime?                 @map("paid_at")
-  extendedById         String?                   @db.Uuid @map("extended_by_id")
-  extendedBy           User?                     @relation("ReferralMilestoneExtendedBy", fields: [extendedById], references: [id])
-  extensionDate        DateTime?                 @map("extension_date")
-  extensionReason      String?                   @map("extension_reason")
-  remarks              String?
+  id                    String                         @id @default(cuid())
+  referralId            String                         @map("referral_id")
+  referral              Referral                       @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  campaignId            String                         @map("campaign_id")
+  campaign              ReferralCampaign               @relation(fields: [campaignId], references: [id])
+  campaignMilestoneId   String                         @map("campaign_milestone_id")
+  campaignMilestone     ReferralCampaignMilestone      @relation(fields: [campaignMilestoneId], references: [id])
+  name                  String
+  sequence              Int
+  trigger               ReferralMilestoneTrigger
+  calculationType       ReferralMilestoneCalcType      @map("calculation_type")
+  value                 Decimal                        @db.Decimal(12, 4)
+  commissionBasis       ReferralCommissionBasis        @map("commission_basis")
+  dueDate               DateTime?                      @map("due_date")
+  expiryDate            DateTime?                      @map("expiry_date")
+  unlockedAt            DateTime?                      @map("unlocked_at")
+  status                ReferralMilestoneStatus        @default(PENDING)
+  achievedAt            DateTime?                      @map("achieved_at")
+  approvedAt            DateTime?                      @map("approved_at")
+  paidAt                DateTime?                      @map("paid_at")
+  extendedById          String?                        @map("extended_by_id") @db.Uuid
+  extendedBy            User?                          @relation("ReferralMilestoneExtendedBy", fields: [extendedById], references: [id])
+  extensionDate         DateTime?                      @map("extension_date")
+  extensionReason       String?                        @map("extension_reason")
+  remarks               String?
   commissionTransaction ReferralCommissionTransaction?
-  createdAt            DateTime                  @default(now()) @map("created_at")
-  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  createdAt             DateTime                       @default(now()) @map("created_at")
+  updatedAt             DateTime                       @updatedAt @map("updated_at")
 
   @@unique([referralId, campaignMilestoneId])
   @@index([campaignId, status])
@@ -1013,34 +1060,34 @@ model ReferralMilestone {
 }
 
 model ReferralCommissionTransaction {
-  id                   String                       @id @default(cuid())
-  referralId           String                       @map("referral_id")
-  referral             Referral                     @relation(fields: [referralId], references: [id], onDelete: Cascade)
-  campaignId           String                       @map("campaign_id")
-  campaign             ReferralCampaign             @relation(fields: [campaignId], references: [id])
-  milestoneId          String                       @map("milestone_id")
-  milestone            ReferralCampaignMilestone    @relation(fields: [milestoneId], references: [id])
-  referralMilestoneId  String?                      @unique @map("referral_milestone_id")
-  referralMilestone    ReferralMilestone?           @relation(fields: [referralMilestoneId], references: [id])
-  learningPathId       String?                      @map("learning_path_id")
-  learningPath         LearningPath?                @relation(fields: [learningPathId], references: [id])
-  calculationType      ReferralMilestoneCalcType    @map("calculation_type")
-  value                Decimal                      @db.Decimal(12, 4)
-  paymentBasisAmount   Decimal                      @map("payment_basis_amount") @db.Decimal(12, 2)
-  calculatedAmount     Decimal                      @map("calculated_amount") @db.Decimal(12, 2)
-  commissionBasis      ReferralCommissionBasis      @map("commission_basis")
-  trigger              ReferralMilestoneTrigger
-  transactionDate      DateTime                     @default(now()) @map("transaction_date")
-  status               ReferralCommissionTxnStatus  @default(PENDING)
-  approvedById         String?                      @db.Uuid @map("approved_by_id")
-  approvedBy           User?                        @relation("CommissionApprovedBy", fields: [approvedById], references: [id])
-  approvedAt           DateTime?                    @map("approved_at")
-  paidAt               DateTime?                    @map("paid_at")
-  statusReason         String?                      @map("status_reason")
-  payment              ReferralCommissionPayment?
-  auditEvents          ReferralCommissionAuditEvent[]
-  createdAt            DateTime                     @default(now()) @map("created_at")
-  updatedAt            DateTime                     @updatedAt @map("updated_at")
+  id                  String                         @id @default(cuid())
+  referralId          String                         @map("referral_id")
+  referral            Referral                       @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  campaignId          String                         @map("campaign_id")
+  campaign            ReferralCampaign               @relation(fields: [campaignId], references: [id])
+  milestoneId         String                         @map("milestone_id")
+  milestone           ReferralCampaignMilestone      @relation(fields: [milestoneId], references: [id])
+  referralMilestoneId String?                        @unique @map("referral_milestone_id")
+  referralMilestone   ReferralMilestone?             @relation(fields: [referralMilestoneId], references: [id])
+  learningPathId      String?                        @map("learning_path_id")
+  learningPath        LearningPath?                  @relation(fields: [learningPathId], references: [id])
+  calculationType     ReferralMilestoneCalcType      @map("calculation_type")
+  value               Decimal                        @db.Decimal(12, 4)
+  paymentBasisAmount  Decimal                        @map("payment_basis_amount") @db.Decimal(12, 2)
+  calculatedAmount    Decimal                        @map("calculated_amount") @db.Decimal(12, 2)
+  commissionBasis     ReferralCommissionBasis        @map("commission_basis")
+  trigger             ReferralMilestoneTrigger
+  transactionDate     DateTime                       @default(now()) @map("transaction_date")
+  status              ReferralCommissionTxnStatus    @default(PENDING)
+  approvedById        String?                        @map("approved_by_id") @db.Uuid
+  approvedBy          User?                          @relation("CommissionApprovedBy", fields: [approvedById], references: [id])
+  approvedAt          DateTime?                      @map("approved_at")
+  paidAt              DateTime?                      @map("paid_at")
+  statusReason        String?                        @map("status_reason")
+  payment             ReferralCommissionPayment?
+  auditEvents         ReferralCommissionAuditEvent[]
+  createdAt           DateTime                       @default(now()) @map("created_at")
+  updatedAt           DateTime                       @updatedAt @map("updated_at")
 
   @@unique([referralId, milestoneId])
   @@index([status, transactionDate])
@@ -1050,19 +1097,19 @@ model ReferralCommissionTransaction {
 }
 
 model ReferralCommissionPayment {
-  id              String                         @id @default(cuid())
-  transactionId   String                         @unique @map("transaction_id")
-  transaction     ReferralCommissionTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  paymentDate     DateTime                       @map("payment_date")
-  amountPaid      Decimal                        @map("amount_paid") @db.Decimal(12, 2)
-  paymentMethod   ReferralPaymentMethod          @map("payment_method")
-  referenceNumber String?                        @map("reference_number")
+  id              String                        @id @default(cuid())
+  transactionId   String                        @unique @map("transaction_id")
+  transaction     ReferralCommissionTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  paymentDate     DateTime                      @map("payment_date")
+  amountPaid      Decimal                       @map("amount_paid") @db.Decimal(12, 2)
+  paymentMethod   ReferralPaymentMethod         @map("payment_method")
+  referenceNumber String?                       @map("reference_number")
   remarks         String?
-  paidById        String                         @db.Uuid @map("paid_by_id")
-  paidBy          User                           @relation("CommissionPaidBy", fields: [paidById], references: [id])
+  paidById        String                        @map("paid_by_id") @db.Uuid
+  paidBy          User                          @relation("CommissionPaidBy", fields: [paidById], references: [id])
   attachments     ReferralPaymentAttachment[]
-  createdAt       DateTime                       @default(now()) @map("created_at")
-  updatedAt       DateTime                       @updatedAt @map("updated_at")
+  createdAt       DateTime                      @default(now()) @map("created_at")
+  updatedAt       DateTime                      @updatedAt @map("updated_at")
 
   @@index([paymentDate])
   @@map("referral_commission_payments")
@@ -1076,7 +1123,7 @@ model ReferralPaymentAttachment {
   fileUrl      String                    @map("file_url")
   fileType     String                    @map("file_type")
   fileSize     Int?                      @map("file_size")
-  uploadedById String                    @db.Uuid @map("uploaded_by_id")
+  uploadedById String                    @map("uploaded_by_id") @db.Uuid
   uploadedBy   User                      @relation("PaymentProofUploadedBy", fields: [uploadedById], references: [id])
   uploadedAt   DateTime                  @default(now()) @map("uploaded_at")
 
@@ -1097,15 +1144,15 @@ model CampaignFeedLink {
 }
 
 model ReferralCommissionAuditEvent {
-  id            String                        @id @default(cuid())
-  transactionId String?                       @map("transaction_id")
+  id            String                         @id @default(cuid())
+  transactionId String?                        @map("transaction_id")
   transaction   ReferralCommissionTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  campaignId    String?                       @map("campaign_id")
-  actorId       String?                       @db.Uuid @map("actor_id")
-  actor         User?                         @relation("CommissionAuditActor", fields: [actorId], references: [id])
+  campaignId    String?                        @map("campaign_id")
+  actorId       String?                        @map("actor_id") @db.Uuid
+  actor         User?                          @relation("CommissionAuditActor", fields: [actorId], references: [id])
   action        String
   details       Json?
-  createdAt     DateTime                      @default(now()) @map("created_at")
+  createdAt     DateTime                       @default(now()) @map("created_at")
 
   @@index([createdAt])
   @@index([transactionId])
@@ -1113,16 +1160,16 @@ model ReferralCommissionAuditEvent {
 }
 
 model ReferralCampaignAuditLog {
-  id         String           @id @default(cuid())
-  campaignId String?          @map("campaign_id")
+  id         String            @id @default(cuid())
+  campaignId String?           @map("campaign_id")
   campaign   ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  actorId    String?          @db.Uuid @map("actor_id")
-  actor      User?            @relation("CampaignAuditActor", fields: [actorId], references: [id])
+  actorId    String?           @map("actor_id") @db.Uuid
+  actor      User?             @relation("CampaignAuditActor", fields: [actorId], references: [id])
   action     String
-  oldValue   Json?            @map("old_value")
-  newValue   Json?            @map("new_value")
-  ipAddress  String?          @map("ip_address")
-  createdAt  DateTime         @default(now()) @map("created_at")
+  oldValue   Json?             @map("old_value")
+  newValue   Json?             @map("new_value")
+  ipAddress  String?           @map("ip_address")
+  createdAt  DateTime          @default(now()) @map("created_at")
 
   @@index([createdAt])
   @@index([campaignId])
@@ -1130,21 +1177,21 @@ model ReferralCampaignAuditLog {
 }
 
 model ReferralProfile {
-  id                 String                @id @default(cuid())
-  userId             String                @unique @db.Uuid @map("user_id")
-  user               User                  @relation(fields: [userId], references: [id])
-  referralCode       String                @unique @map("referral_code")
-  status             ReferralProfileStatus @default(ACTIVE)
-  termsAccepted      Boolean               @map("terms_accepted")
-  termsAcceptedAt    DateTime              @map("terms_accepted_at")
-  privacyAccepted    Boolean               @map("privacy_accepted")
-  privacyAcceptedAt  DateTime              @map("privacy_accepted_at")
-  termsVersion       String                @map("terms_version")
-  privacyVersion     String                @default("PRIVACY-2026-01") @map("privacy_version")
-  joinedAt           DateTime              @map("joined_at")
-  campaignEligible   Boolean               @default(true) @map("campaign_eligible")
-  createdAt          DateTime              @default(now()) @map("created_at")
-  updatedAt          DateTime              @updatedAt @map("updated_at")
+  id                String                @id @default(cuid())
+  userId            String                @unique @map("user_id") @db.Uuid
+  user              User                  @relation(fields: [userId], references: [id])
+  referralCode      String                @unique @map("referral_code")
+  status            ReferralProfileStatus @default(ACTIVE)
+  termsAccepted     Boolean               @map("terms_accepted")
+  termsAcceptedAt   DateTime              @map("terms_accepted_at")
+  privacyAccepted   Boolean               @map("privacy_accepted")
+  privacyAcceptedAt DateTime              @map("privacy_accepted_at")
+  termsVersion      String                @map("terms_version")
+  privacyVersion    String                @default("PRIVACY-2026-01") @map("privacy_version")
+  joinedAt          DateTime              @map("joined_at")
+  campaignEligible  Boolean               @default(true) @map("campaign_eligible")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("referral_profiles")
@@ -1153,7 +1200,7 @@ model ReferralProfile {
 model Certificate {
   id                String        @id @default(cuid())
   certificateNumber String        @unique @map("certificate_number")
-  learnerId         String        @db.Uuid @map("learner_id")
+  learnerId         String        @map("learner_id") @db.Uuid
   learner           User          @relation(fields: [learnerId], references: [id])
   learningPathId    String?       @map("learning_path_id")
   learningPath      LearningPath? @relation(fields: [learningPathId], references: [id])
@@ -1174,15 +1221,15 @@ model Certificate {
  * icon shown on My Achievements.
  */
 model Badge {
-  id             String       @id @default(cuid())
-  learnerId      String       @db.Uuid @map("learner_id")
-  learner        User         @relation(fields: [learnerId], references: [id])
-  learningPathId String?      @map("learning_path_id")
+  id             String        @id @default(cuid())
+  learnerId      String        @map("learner_id") @db.Uuid
+  learner        User          @relation(fields: [learnerId], references: [id])
+  learningPathId String?       @map("learning_path_id")
   learningPath   LearningPath? @relation(fields: [learningPathId], references: [id])
-  pathTitle      String       @map("path_title")
-  icon           String       @default("🏅")
-  issuedAt       DateTime     @default(now()) @map("issued_at")
-  createdAt      DateTime     @default(now()) @map("created_at")
+  pathTitle      String        @map("path_title")
+  icon           String        @default("🏅")
+  issuedAt       DateTime      @default(now()) @map("issued_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
 
   @@unique([learnerId, learningPathId])
   @@index([learnerId])
@@ -1191,44 +1238,50 @@ model Badge {
 }
 
 model LearningPath {
-  id                     String                 @id @default(cuid())
-  title                  String
-  slug                   String                 @unique
-  description            String
-  thumbnailUrl           String?                @map("thumbnail_url")
-  estimatedDuration      Int?                   @map("estimated_duration")
-  difficulty             LearningPathDifficulty @default(BEGINNER)
-  category               String
-  status                 LearningPathStatus     @default(DRAFT)
-  visibility             LearningPathVisibility @default(PUBLIC)
-  isFeatured             Boolean                @default(false) @map("is_featured")
-  requiredQuizFeedItemId String?                @map("required_quiz_feed_item_id")
-  requiredQuiz           FeedItem?              @relation("RequiredQuizPath", fields: [requiredQuizFeedItemId], references: [id])
-  quizPassPercentage     Int                    @default(60) @map("quiz_pass_percentage")
-  certificateTemplate    String?                @map("certificate_template")
-  rewardType             LearningPathRewardType @default(CERTIFICATE) @map("reward_type")
-  /** Emoji shown on the earned badge — only meaningful when rewardType is BADGE. */
-  badgeIcon              String?                @map("badge_icon")
-  /** Price in paise (1/100 rupee, matching Razorpay's smallest-unit requirement). Null = free, open to any logged-in learner. */
-  priceInPaise           Int?                   @map("price_in_paise")
-  items                  LearningPathItem[]
-  progress               UserLearningProgress[]
-  itemCompletions        UserPathItemCompletion[]
-  quizAttempts           QuizAttempt[]
-  certificates           Certificate[]
-  badges                 Badge[]
+  id                      String                          @id @default(cuid())
+  title                   String
+  slug                    String                          @unique
+  description             String
+  thumbnailUrl            String?                         @map("thumbnail_url")
+  estimatedDuration       Int?                            @map("estimated_duration")
+  difficulty              LearningPathDifficulty          @default(BEGINNER)
+  category                String
+  status                  LearningPathStatus              @default(DRAFT)
+  visibility              LearningPathVisibility          @default(PUBLIC)
+  isFeatured              Boolean                         @default(false) @map("is_featured")
+  requiredQuizFeedItemId  String?                         @map("required_quiz_feed_item_id")
+  requiredQuiz            FeedItem?                       @relation("RequiredQuizPath", fields: [requiredQuizFeedItemId], references: [id])
+  quizPassPercentage      Int                             @default(60) @map("quiz_pass_percentage")
+  certificateTemplate     String?                         @map("certificate_template")
+  rewardType              LearningPathRewardType          @default(CERTIFICATE) @map("reward_type")
+  /**
+   * Emoji shown on the earned badge — only meaningful when rewardType is BADGE.
+   */
+  badgeIcon               String?                         @map("badge_icon")
+  /**
+   * Price in paise (1/100 rupee, matching Razorpay's smallest-unit requirement). Null = free, open to any logged-in learner.
+   */
+  priceInPaise            Int?                            @map("price_in_paise")
+  items                   LearningPathItem[]
+  progress                UserLearningProgress[]
+  itemCompletions         UserPathItemCompletion[]
+  quizAttempts            QuizAttempt[]
+  certificates            Certificate[]
+  badges                  Badge[]
   referralCampaignCourses ReferralCampaignCourse[]
-  commissionTransactions ReferralCommissionTransaction[]
-  bundlePaths            BundlePath[]
-  purchases              Purchase[]
-  createdAt              DateTime               @default(now()) @map("created_at")
-  updatedAt              DateTime               @updatedAt @map("updated_at")
+  commissionTransactions  ReferralCommissionTransaction[]
+  bundlePaths             BundlePath[]
+  purchases               Purchase[]
+  createdAt               DateTime                        @default(now()) @map("created_at")
+  updatedAt               DateTime                        @updatedAt @map("updated_at")
 
   @@index([status, visibility])
   @@map("learning_paths")
 }
 
-/** A combo offer bundling several LearningPaths at one price, sold as a single purchase. */
+/**
+ * A combo offer bundling several LearningPaths at one price, sold as a single purchase.
+ */
 model Bundle {
   id           String       @id @default(cuid())
   title        String
@@ -1257,6 +1310,14 @@ model BundlePath {
 enum PurchasableType {
   LEARNING_PATH
   BUNDLE
+  /**
+   * A MOODLE_COURSE FeedItem — grants an LTI launch entitlement into the mapped Moodle course.
+   */
+  MOODLE_COURSE
+  /**
+   * An on-demand tutor session, priced per-request once a trainer/admin quotes it.
+   */
+  TUTOR_SESSION
 }
 
 enum PurchaseStatus {
@@ -1272,25 +1333,114 @@ enum PurchaseStatus {
  * arrives; both call the same service method, which is idempotent).
  */
 model Purchase {
-  id                String          @id @default(cuid())
-  userId            String          @map("user_id") @db.Uuid
-  user              User            @relation(fields: [userId], references: [id])
-  purchasableType   PurchasableType @map("purchasable_type")
-  learningPathId    String?         @map("learning_path_id")
-  learningPath      LearningPath?   @relation(fields: [learningPathId], references: [id])
-  bundleId          String?         @map("bundle_id")
-  bundle            Bundle?         @relation(fields: [bundleId], references: [id])
-  amountPaise       Int             @map("amount_paise")
-  status            PurchaseStatus  @default(PENDING)
-  razorpayOrderId   String          @unique @map("razorpay_order_id")
-  razorpayPaymentId String?         @map("razorpay_payment_id")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+  id                    String               @id @default(cuid())
+  userId                String               @map("user_id") @db.Uuid
+  user                  User                 @relation(fields: [userId], references: [id])
+  purchasableType       PurchasableType      @map("purchasable_type")
+  learningPathId        String?              @map("learning_path_id")
+  learningPath          LearningPath?        @relation(fields: [learningPathId], references: [id])
+  bundleId              String?              @map("bundle_id")
+  bundle                Bundle?              @relation(fields: [bundleId], references: [id])
+  /**
+   * MOODLE_COURSE only: the FeedItem (type MOODLE_COURSE) being unlocked.
+   */
+  feedItemId            String?              @map("feed_item_id")
+  feedItem              FeedItem?            @relation(fields: [feedItemId], references: [id])
+  /**
+   * TUTOR_SESSION only: the priced request this payment confirms.
+   */
+  tutorSessionRequestId String?              @unique @map("tutor_session_request_id")
+  tutorSessionRequest   TutorSessionRequest? @relation(fields: [tutorSessionRequestId], references: [id])
+  amountPaise           Int                  @map("amount_paise")
+  status                PurchaseStatus       @default(PENDING)
+  razorpayOrderId       String               @unique @map("razorpay_order_id")
+  razorpayPaymentId     String?              @map("razorpay_payment_id")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([learningPathId])
   @@index([bundleId])
+  @@index([feedItemId])
   @@map("purchases")
+}
+
+/**
+ * Links a MOODLE_COURSE FeedItem to the actual course on the self-hosted
+ * Moodle instance. The LTI launch endpoint uses this to know which Moodle
+ * course to open once a Purchase confirms access.
+ */
+model MoodleCourseMapping {
+  id                   String   @id @default(cuid())
+  feedItemId           String   @unique @map("feed_item_id")
+  feedItem             FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  moodleCourseId       Int      @map("moodle_course_id")
+  /**
+   * Moodle's course idnumber/shortname, shown to admins for cross-checking against the Moodle UI — not used programmatically.
+   */
+  moodleCourseIdNumber String?  @map("moodle_course_id_number")
+  /**
+   * The exact target_link_uri Moodle's "publish as LTI tool" screen gives for this course — required before launch works, but nullable so the mapping (and its price) can be created before that registration step is done. Must be the bare Tool URL with no query string; Moodle validates it byte-for-byte against the registered redirect URI (confirmed on a real launch attempt).
+   */
+  targetLinkUri        String?  @map("target_link_uri")
+  /**
+   * Moodle's "Custom properties" for this published resource (e.g. "id=76205b0e-..."), query-string-shaped — sent as the LTI custom claim, NOT appended to targetLinkUri (Moodle rejects a target_link_uri with a query string).
+   */
+  ltiCustomParams      String?  @map("lti_custom_params")
+  priceInPaise         Int      @map("price_in_paise")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("moodle_course_mappings")
+}
+
+enum SessionRequestStatus {
+  /**
+   * Student submitted a request; awaiting a trainer/admin price quote.
+   */
+  REQUESTED
+  /**
+   * Priced — waiting on student payment.
+   */
+  PRICED
+  /**
+   * Paid and scheduled.
+   */
+  CONFIRMED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+/**
+ * A student-initiated request for a paid 1:1 (or small-group) session with a specific trainer, priced per-request rather than a fixed rate.
+ */
+model TutorSessionRequest {
+  id               String               @id @default(cuid())
+  studentId        String               @map("student_id") @db.Uuid
+  student          User                 @relation(fields: [studentId], references: [id])
+  trainerId        String               @map("trainer_id")
+  trainer          Trainer              @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  topic            String
+  preferredAt      DateTime             @map("preferred_at")
+  durationMinutes  Int                  @map("duration_minutes")
+  status           SessionRequestStatus @default(REQUESTED)
+  /**
+   * Set by the trainer/admin when quoting — null until status reaches PRICED.
+   */
+  priceAmountPaise Int?                 @map("price_amount_paise")
+  purchase         Purchase?
+  scheduledAt      DateTime?            @map("scheduled_at")
+  meetingUrl       String?              @map("meeting_url")
+  adminNotes       String?              @map("admin_notes")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@index([studentId])
+  @@index([trainerId])
+  @@index([status])
+  @@map("tutor_session_requests")
 }
 
 model LearningPathItem {
@@ -1310,7 +1460,7 @@ model LearningPathItem {
 
 model UserLearningProgress {
   id              String             @id @default(cuid())
-  userId          String             @db.Uuid @map("user_id")
+  userId          String             @map("user_id") @db.Uuid
   user            User               @relation(fields: [userId], references: [id])
   learningPathId  String             @map("learning_path_id")
   learningPath    LearningPath       @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
@@ -1327,7 +1477,7 @@ model UserLearningProgress {
 
 model UserPathItemCompletion {
   id             String       @id @default(cuid())
-  userId         String       @db.Uuid @map("user_id")
+  userId         String       @map("user_id") @db.Uuid
   user           User         @relation(fields: [userId], references: [id])
   learningPathId String       @map("learning_path_id")
   learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
@@ -1342,7 +1492,7 @@ model UserPathItemCompletion {
 
 model QuizAttempt {
   id             String        @id @default(cuid())
-  userId         String        @db.Uuid @map("user_id")
+  userId         String        @map("user_id") @db.Uuid
   user           User          @relation(fields: [userId], references: [id])
   feedItemId     String        @map("feed_item_id")
   feedItem       FeedItem      @relation(fields: [feedItemId], references: [id])
@@ -1447,7 +1597,6 @@ enum PartnerStatus {
  * the partner's own staff add candidates to that allowlist, kept distinct
  * from accessCode so a student holding the board link can never add
  * themselves or others to it.
- *
  * By default every partner sees the same global (unowned) JOB_POSTING
  * FeedItems; a posting can optionally be scoped exclusively to one partner
  * via FeedItem.postedByPartnerId, and other partners can gain visibility
@@ -1530,13 +1679,21 @@ model PartnerSubscription {
 }
 
 enum BenefitKind {
-  /** Flat amount off the base fee, e.g. ₹2,000 off. */
+  /**
+   * Flat amount off the base fee, e.g. ₹2,000 off.
+   */
   DISCOUNT_FLAT
-  /** Percentage off the base fee. */
+  /**
+   * Percentage off the base fee.
+   */
   DISCOUNT_PERCENT
-  /** A code a learner enters elsewhere (no automatic discount math here). */
+  /**
+   * A code a learner enters elsewhere (no automatic discount math here).
+   */
   PROMO_CODE
-  /** A non-monetary perk, e.g. "Includes 1 free mock exam". */
+  /**
+   * A non-monetary perk, e.g. "Includes 1 free mock exam".
+   */
   PERK
 }
 

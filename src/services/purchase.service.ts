@@ -8,6 +8,8 @@ export const purchaseService = {
     let amountPaise: number;
     let learningPathId: string | null = null;
     let bundleId: string | null = null;
+    let feedItemId: string | null = null;
+    let tutorSessionRequestId: string | null = null;
 
     if (purchasableType === "LEARNING_PATH") {
       const path = await prisma.learningPath.findUnique({ where: { id } });
@@ -15,11 +17,24 @@ export const purchaseService = {
       if (!path.priceInPaise) throw new AppValidationError("This learning path is not for sale");
       amountPaise = path.priceInPaise;
       learningPathId = path.id;
-    } else {
+    } else if (purchasableType === "BUNDLE") {
       const bundle = await prisma.bundle.findUnique({ where: { id } });
       if (!bundle || !bundle.isActive) throw new AppValidationError("Bundle not found");
       amountPaise = bundle.priceInPaise;
       bundleId = bundle.id;
+    } else if (purchasableType === "MOODLE_COURSE") {
+      const mapping = await prisma.moodleCourseMapping.findUnique({ where: { feedItemId: id } });
+      if (!mapping || !mapping.isActive) throw new AppValidationError("This course is not for sale");
+      amountPaise = mapping.priceInPaise;
+      feedItemId = mapping.feedItemId;
+    } else {
+      const request = await prisma.tutorSessionRequest.findUnique({ where: { id } });
+      if (!request || request.studentId !== userId) throw new AppValidationError("Session request not found");
+      if (request.status !== "PRICED" || !request.priceAmountPaise) {
+        throw new AppValidationError("This session hasn't been priced yet");
+      }
+      amountPaise = request.priceAmountPaise;
+      tutorSessionRequestId = request.id;
     }
 
     const razorpay = getRazorpayClient();
@@ -37,6 +52,8 @@ export const purchaseService = {
         purchasableType,
         learningPathId,
         bundleId,
+        feedItemId,
+        tutorSessionRequestId,
         amountPaise,
         razorpayOrderId: order.id,
       },
@@ -49,6 +66,17 @@ export const purchaseService = {
       currency: "INR",
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? null,
     };
+  },
+
+  /** Side effect once a Purchase is confirmed PAID: if it's paying for a tutor session, move that request to CONFIRMED. */
+  async _confirmLinkedTutorSession(tutorSessionRequestId: string | null) {
+    if (!tutorSessionRequestId) return;
+    const request = await prisma.tutorSessionRequest.findUnique({ where: { id: tutorSessionRequestId } });
+    if (!request || request.status === "CONFIRMED") return;
+    await prisma.tutorSessionRequest.update({
+      where: { id: tutorSessionRequestId },
+      data: { status: "CONFIRMED", scheduledAt: request.preferredAt },
+    });
   },
 
   /** Called from the client immediately after Razorpay's checkout succeeds. */
@@ -67,10 +95,12 @@ export const purchaseService = {
       throw new AppValidationError("Payment verification failed");
     }
 
-    return prisma.purchase.update({
+    const paid = await prisma.purchase.update({
       where: { id: purchase.id },
       data: { status: "PAID", razorpayPaymentId: input.razorpayPaymentId },
     });
+    await purchaseService._confirmLinkedTutorSession(paid.tutorSessionRequestId);
+    return paid;
   },
 
   /**
@@ -85,6 +115,7 @@ export const purchaseService = {
       where: { id: purchase.id },
       data: { status: "PAID", razorpayPaymentId },
     });
+    await purchaseService._confirmLinkedTutorSession(purchase.tutorSessionRequestId);
   },
 
   async hasPathAccess(userId: string, pathId: string): Promise<boolean> {

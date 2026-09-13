@@ -85,7 +85,7 @@ export function PortalNav({
     { href: "/my-availability", label: "My Availability", icon: CalendarClock, roles: ["CAREER_OFFICER", "TRAINER"] },
     { href: "/my-achievements", label: "Achievements", icon: Trophy, roles: ["LEARNER"] },
     { href: "/crm", label: "CRM", icon: Users, roles: ["ADMIN", "CAREER_OFFICER"] },
-    { href: "/trainers", label: "Trainer Network", icon: GraduationCap, roles: ["ADMIN", "TRAINER", "CAREER_OFFICER"] },
+    { href: "/trainers", label: "Trainer Network", icon: GraduationCap, roles: ["ADMIN", "TRAINER", "CAREER_OFFICER", "LEARNER"] },
     { href: "/trainer-portal", label: "Trainer Portal", icon: Presentation, roles: ["TRAINER"] },
     { href: "/my-sessions", label: "My Sessions", icon: ClipboardCheck, roles: [] },
     { href: referralProgramJoined ? "/referrals" : "/referrals/join", label: referralProgramJoined ? "My Referrals" : "Join Referral Program", icon: Network, roles: [] },

@@ -1,0 +1,53 @@
+# Self-hosted Moodle, isolated from the host's ancient PHP 7.0 / MySQL 5.7 stack.
+# Apache on the HOST reverse-proxies a subdomain to the `moodle` service's
+# published port (bound to 127.0.0.1 only — never exposed directly).
+#
+# Before first run:
+#   1. Replace every CHANGE_ME_* value below with your own strong secret
+#      (e.g. `openssl rand -base64 24`). Do not reuse the host's existing
+#      MySQL credentials — this is a separate, isolated database.
+#   2. `touch config.php` in this directory (an empty file, so Docker bind-mounts
+#      a FILE, not a directory, at /var/www/html/config.php).
+services:
+  moodle-db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    # MariaDB 11.x defaults to utf8mb4_uca1400_ai_ci, a newer collation
+    # name Moodle's environment checker (predates this collation) doesn't
+    # recognize as UTF-8, failing the install with a false "unicode not
+    # enabled" error. Pin to the traditional collation name instead.
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+    environment:
+      MARIADB_DATABASE: moodle
+      MARIADB_USER: moodle
+      MARIADB_PASSWORD: "CHANGE_ME_DB_PASSWORD"
+      MARIADB_ROOT_PASSWORD: "CHANGE_ME_DB_ROOT_PASSWORD"
+    volumes:
+      - moodle_db_data:/var/lib/mysql
+    networks:
+      - moodle_net
+
+  moodle:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - moodle-db
+    ports:
+      # Loopback-only — the host's Apache is the sole public entry point.
+      - "127.0.0.1:8091:80"
+    volumes:
+      # moodledata: Moodle's file store, kept outside the web root.
+      - moodle_data:/var/www/moodledata
+      # config.php lives on the HOST (not a named volume) so it survives an
+      # image rebuild/container recreation, which would otherwise wipe it.
+      - ./config.php:/var/www/html/config.php
+    networks:
+      - moodle_net
+
+volumes:
+  moodle_db_data:
+  moodle_data:
+
+networks:
+  moodle_net:
+    driver: bridge

@@ -70,6 +70,9 @@ export default async function FeedCoursePage({
           </Badge>
         )}
         <h1 className="mt-3 text-3xl font-bold">{item.title}</h1>
+        <Badge className="mt-2 border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
+          Live, instructor-led
+        </Badge>
         <p className="mt-2 text-slate-500">{item.description}</p>
         {course?.instructor && <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Instructor: {course.instructor}</p>}
         {path && <p className="mt-2 text-sm text-teal-700">Part of: {path.title}</p>}
@@ -215,6 +218,16 @@ export default async function FeedCoursePage({
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="p-5 text-sm text-slate-500">
+          Not ready for a full batch, or want focused help on one topic?{" "}
+          <Link href="/trainers" className="font-semibold text-teal-700 hover:underline">
+            Request a paid 1:1 session
+          </Link>{" "}
+          with any of our trainers instead.
+        </CardContent>
+      </Card>
     </div>
   );
 }

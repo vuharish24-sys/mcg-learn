@@ -29,7 +29,7 @@ export function BuyButton({
   label,
   learner,
 }: {
-  purchasableType: "LEARNING_PATH" | "BUNDLE";
+  purchasableType: "LEARNING_PATH" | "BUNDLE" | "MOODLE_COURSE" | "TUTOR_SESSION";
   id: string;
   label: string;
   learner: { fullName: string; email: string; phone: string | null };
