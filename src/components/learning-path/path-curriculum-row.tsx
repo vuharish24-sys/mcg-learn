@@ -2,9 +2,17 @@ import Link from "next/link";
 import { CheckCircle2, Circle, Lock } from "lucide-react";
 import { feedItemImageUrl } from "@/lib/learning-path-media";
 import { feedTypeLabel } from "@/lib/feed-actions";
+import { BuyButton } from "@/components/purchases/buy-button";
 import { Badge } from "@/components/ui/badge";
 import { MediaCover } from "@/components/ui/media-cover";
 import type { FeedType } from "@prisma/client";
+
+export type CurriculumBuyOption = {
+  purchasableType: "LEARNING_PATH_MODULE" | "LEARNING_PATH_ITEM";
+  id: string;
+  priceInPaise: number;
+  label: string;
+};
 
 type CurriculumFeedItem = {
   id: string;
@@ -25,6 +33,8 @@ export function PathCurriculumRow({
   isRequired,
   bestScore,
   feedItem,
+  buyOption,
+  learner,
 }: {
   index: number;
   href: string;
@@ -33,6 +43,9 @@ export function PathCurriculumRow({
   isRequired: boolean;
   bestScore: number | null;
   feedItem: CurriculumFeedItem;
+  /** Only meaningful while locked: lets the learner buy just this lesson or its module, without buying the whole course. */
+  buyOption?: CurriculumBuyOption | null;
+  learner?: { fullName: string; email: string; phone: string | null };
 }) {
   const imageUrl = feedItemImageUrl(feedItem);
   const title = feedItem.previewTitle || feedItem.title;
@@ -85,11 +98,31 @@ export function PathCurriculumRow({
             {isComplete ? "Review" : "Open"} →
           </span>
         )}
+        {locked && buyOption && learner && (
+          <div className="mt-2 sm:hidden">
+            <BuyButton
+              purchasableType={buyOption.purchasableType}
+              id={buyOption.id}
+              label={`${buyOption.label} — ₹${(buyOption.priceInPaise / 100).toLocaleString("en-IN")}`}
+              learner={learner}
+            />
+          </div>
+        )}
       </div>
       {!locked && (
         <span className="hidden shrink-0 text-sm font-semibold text-teal-700 sm:inline">
           {isComplete ? "Review" : "Open"} →
         </span>
+      )}
+      {locked && buyOption && learner && (
+        <div className="hidden shrink-0 sm:block">
+          <BuyButton
+            purchasableType={buyOption.purchasableType}
+            id={buyOption.id}
+            label={`${buyOption.label} — ₹${(buyOption.priceInPaise / 100).toLocaleString("en-IN")}`}
+            learner={learner}
+          />
+        </div>
       )}
     </div>
   );

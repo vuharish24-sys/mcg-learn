@@ -1,8 +1,38 @@
 import { AppValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
+export type BundleItemInput = {
+  type: "LEARNING_PATH" | "LEARNING_PATH_MODULE" | "LEARNING_PATH_ITEM";
+  id: string;
+};
+
+function toBundleItemCreateData(items: BundleItemInput[]) {
+  return items.map((item) => ({
+    learningPathId: item.type === "LEARNING_PATH" ? item.id : null,
+    learningPathModuleId: item.type === "LEARNING_PATH_MODULE" ? item.id : null,
+    learningPathItemId: item.type === "LEARNING_PATH_ITEM" ? item.id : null,
+  }));
+}
+
+export function bundleItemLabel(item: {
+  learningPath: { title: string } | null;
+  learningPathModule: { title: string } | null;
+  learningPathItem: { feedItem: { title: string } } | null;
+}): string {
+  if (item.learningPath) return item.learningPath.title;
+  if (item.learningPathModule) return item.learningPathModule.title;
+  if (item.learningPathItem) return item.learningPathItem.feedItem.title;
+  return "Unknown item";
+}
+
 const bundleInclude = {
-  paths: { include: { learningPath: { select: { id: true, title: true, slug: true } } } },
+  items: {
+    include: {
+      learningPath: { select: { id: true, title: true, slug: true } },
+      learningPathModule: { select: { id: true, title: true } },
+      learningPathItem: { include: { feedItem: { select: { id: true, title: true } } } },
+    },
+  },
 } as const;
 
 export const bundleService = {
@@ -28,7 +58,7 @@ export const bundleService = {
     description: string;
     priceInPaise: number;
     isActive: boolean;
-    learningPathIds: string[];
+    items: BundleItemInput[];
   }) {
     const existing = await prisma.bundle.findUnique({ where: { slug: input.slug } });
     if (existing) throw new AppValidationError("A bundle with this slug already exists");
@@ -40,7 +70,7 @@ export const bundleService = {
         description: input.description,
         priceInPaise: input.priceInPaise,
         isActive: input.isActive,
-        paths: { create: input.learningPathIds.map((learningPathId) => ({ learningPathId })) },
+        items: { create: toBundleItemCreateData(input.items) },
       },
       include: bundleInclude,
     });
@@ -53,17 +83,17 @@ export const bundleService = {
       description?: string;
       priceInPaise?: number;
       isActive?: boolean;
-      learningPathIds?: string[];
+      items?: BundleItemInput[];
     },
   ) {
     const existing = await prisma.bundle.findUnique({ where: { id } });
     if (!existing) throw new AppValidationError("Bundle not found");
 
     return prisma.$transaction(async (tx) => {
-      if (input.learningPathIds) {
-        await tx.bundlePath.deleteMany({ where: { bundleId: id } });
-        await tx.bundlePath.createMany({
-          data: input.learningPathIds.map((learningPathId) => ({ bundleId: id, learningPathId })),
+      if (input.items) {
+        await tx.bundleItem.deleteMany({ where: { bundleId: id } });
+        await tx.bundleItem.createMany({
+          data: toBundleItemCreateData(input.items).map((item) => ({ bundleId: id, ...item })),
         });
       }
       return tx.bundle.update({

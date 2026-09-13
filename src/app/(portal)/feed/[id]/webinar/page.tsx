@@ -6,7 +6,7 @@ import { parseFeedContent, SESSION_TYPE_LABEL } from "@/lib/feed-actions";
 import { formatDate } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
-import { purchaseService } from "@/services/purchase.service";
+import { contentAccessService } from "@/services/content-access.service";
 import { FeedLeadForm } from "@/components/feed/feed-lead-form";
 import { PathItemCompleteButton } from "@/components/learning-path/path-item-complete-button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ export default async function FeedWebinarPage({
   const path = learningPathId
     ? await prisma.learningPath.findUnique({ where: { id: learningPathId } })
     : null;
-  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
+  if (path && !(await contentAccessService.hasItemAccess(user.id, path.id, item.id))) notFound();
 
   const content = parseFeedContent(item.content);
 

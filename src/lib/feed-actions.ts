@@ -9,7 +9,7 @@ import { enumLabel } from "@/lib/utils";
  */
 export function feedTypeLabel(type: FeedType): string {
   if (type === "COURSE") return "Program";
-  if (type === "MOODLE_COURSE") return "LMS Course";
+  if (type === "TUTOR_LMS_COURSE") return "LMS Course";
   return enumLabel(type);
 }
 
@@ -21,7 +21,7 @@ export type FeedActionKind =
   | "watch"
   | "job"
   | "course"
-  | "moodleCourse"
+  | "tutorLmsCourse"
   | "external"
   | "internal";
 
@@ -42,8 +42,8 @@ export function getFeedActionKind(type: FeedType): FeedActionKind {
       return "job";
     case "COURSE":
       return "course";
-    case "MOODLE_COURSE":
-      return "moodleCourse";
+    case "TUTOR_LMS_COURSE":
+      return "tutorLmsCourse";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -72,7 +72,7 @@ export function getFeedActionLabel(type: FeedType): string {
       return "View job";
     case "COURSE":
       return "View program";
-    case "MOODLE_COURSE":
+    case "TUTOR_LMS_COURSE":
       return "View course";
     case "ADVERTISEMENT":
     case "SPONSORED":
@@ -95,7 +95,7 @@ export function getFeedActionHref(id: string, type: FeedType): string {
   // middleware. This is the one content type with its own public route.
   if (kind === "job") return `/jobs/${id}`;
   if (kind === "course") return `/feed/${id}/course`;
-  if (kind === "moodleCourse") return `/feed/${id}/moodle-course`;
+  if (kind === "tutorLmsCourse") return `/feed/${id}/tutor-lms-course`;
   return `/api/v1/feed/${id}/open`;
 }
 
@@ -110,7 +110,7 @@ export function getPathFeedItemHref(id: string, type: FeedType, learningPathId: 
   if (kind === "watch") return `/feed/${id}/watch?${qs}`;
   if (kind === "job") return `/jobs/${id}`;
   if (kind === "course") return `/feed/${id}/course?${qs}`;
-  if (kind === "moodleCourse") return `/feed/${id}/moodle-course?${qs}`;
+  if (kind === "tutorLmsCourse") return `/feed/${id}/tutor-lms-course?${qs}`;
   return `/feed/${id}/engage?${qs}`;
 }
 

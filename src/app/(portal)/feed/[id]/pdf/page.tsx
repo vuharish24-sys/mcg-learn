@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
-import { purchaseService } from "@/services/purchase.service";
+import { contentAccessService } from "@/services/content-access.service";
 import { PathItemCompleteButton } from "@/components/learning-path/path-item-complete-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -27,7 +27,7 @@ export default async function FeedPdfPage({
   const path = learningPathId
     ? await prisma.learningPath.findUnique({ where: { id: learningPathId } })
     : null;
-  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
+  if (path && !(await contentAccessService.hasItemAccess(user.id, path.id, item.id))) notFound();
 
   await prisma.feedItem.update({
     where: { id },

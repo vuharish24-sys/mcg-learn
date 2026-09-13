@@ -131,7 +131,15 @@ export const availabilityRuleGenerateSchema = z.object({
 });
 
 export const purchaseCheckoutSchema = z.object({
-  purchasableType: z.enum(["LEARNING_PATH", "BUNDLE", "MOODLE_COURSE", "TUTOR_SESSION"]),
+  purchasableType: z.enum([
+    "LEARNING_PATH",
+    "LEARNING_PATH_MODULE",
+    "LEARNING_PATH_ITEM",
+    "BUNDLE",
+    "TUTOR_LMS_COURSE",
+    "TUTOR_SESSION",
+    "INSTALLMENT",
+  ]),
   id: z.string().min(1),
 });
 
@@ -146,13 +154,8 @@ export const tutorSessionPriceSchema = z.object({
   priceAmountPaise: z.coerce.number().int().min(100),
 });
 
-export const moodleCourseMappingSchema = z.object({
-  moodleCourseId: z.coerce.number().int().min(1),
-  moodleCourseIdNumber: z.string().nullish(),
-  // Bare Tool URL only — Moodle validates it byte-for-byte against the
-  // registered redirect URI and rejects one with a query string.
-  targetLinkUri: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
-  ltiCustomParams: z.string().nullish(),
+export const tutorLmsCourseMappingSchema = z.object({
+  tutorCourseId: z.coerce.number().int().min(1),
   priceInPaise: z.coerce.number().int().min(0),
   isActive: z.coerce.boolean().optional(),
 });
@@ -163,13 +166,42 @@ export const purchaseVerifySchema = z.object({
   razorpaySignature: z.string().min(1),
 });
 
+export const learningPathModuleCreateSchema = z.object({
+  learningPathId: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).optional(),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+  priceInPaise: z.union([z.coerce.number().int().min(1), z.literal(""), z.null()]).optional(),
+});
+
+export const learningPathModuleUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().max(2000).optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+  priceInPaise: z.union([z.coerce.number().int().min(1), z.literal(""), z.null()]).optional(),
+});
+
+export const installmentPlanCreateSchema = z.object({
+  userEmail: z.string().trim().email(),
+  targetType: z.enum(["LEARNING_PATH", "LEARNING_PATH_MODULE", "LEARNING_PATH_ITEM"]),
+  targetId: z.string().min(1),
+  installments: z
+    .array(z.object({ amountPaise: z.coerce.number().int().min(1), dueDate: z.coerce.date() }))
+    .min(2, "An installment plan needs at least 2 installments"),
+});
+
+export const bundleItemInputSchema = z.object({
+  type: z.enum(["LEARNING_PATH", "LEARNING_PATH_MODULE", "LEARNING_PATH_ITEM"]),
+  id: z.string().min(1),
+});
+
 export const bundleCreateSchema = z.object({
   title: z.string().trim().min(1).max(150),
   slug: z.string().trim().min(1).max(150).regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only"),
   description: z.string().trim().min(1).max(2000),
   priceInPaise: z.coerce.number().int().min(100),
   isActive: z.coerce.boolean().default(true),
-  learningPathIds: z.array(z.string().min(1)).min(2, "A bundle needs at least 2 learning paths"),
+  items: z.array(bundleItemInputSchema).min(2, "A bundle needs at least 2 items"),
 });
 
 export const bundleUpdateSchema = z.object({
@@ -177,7 +209,7 @@ export const bundleUpdateSchema = z.object({
   description: z.string().trim().min(1).max(2000).optional(),
   priceInPaise: z.coerce.number().int().min(100).optional(),
   isActive: z.coerce.boolean().optional(),
-  learningPathIds: z.array(z.string().min(1)).min(2).optional(),
+  items: z.array(bundleItemInputSchema).min(2).optional(),
 });
 
 const compensationType = z.enum(["HOURLY", "FLAT_PER_SESSION", "FLAT_PER_DELIVERABLE", "PER_STUDENT_USE"]);

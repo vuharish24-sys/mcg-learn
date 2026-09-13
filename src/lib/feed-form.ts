@@ -16,7 +16,7 @@ const feedTypes = [
   "INTERNAL_PROMOTION",
   "JOB_POSTING",
   "COURSE",
-  "MOODLE_COURSE",
+  "TUTOR_LMS_COURSE",
 ] as const;
 
 export { feedTypes };

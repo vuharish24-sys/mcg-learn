@@ -1,8 +1,8 @@
 # MCG Learn — Session Changelog
 
-**Date:** 2026-09-06 (updated — see §24–25 for this update)
-**Period:** 2026-08-01 → 2026-09-06
-**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system, content sources, session scheduling, appointment booking, real in-app purchasing, full trainer program, course enrollment gating, onboarding UI
+**Date:** 2026-09-13 (updated — see §27–32 for this update)
+**Period:** 2026-08-01 → 2026-09-13
+**Scope:** Business-logic audit and fixes, new features, design pass, security fix, first production deployment, live auth verification, engagement features, social embedding, placement/job-board system, merged feed redesign, course catalog with multi-variant pricing, coupon/scholarship (benefit) system, feed hero card + badge reward system, content sources, session scheduling, appointment booking, real in-app purchasing, full trainer program, course enrollment gating, onboarding UI, course/program terminology alignment, on-demand tutor sessions, a full self-hosted Moodle + LTI 1.3 integration (built, debugged, then fully replaced), the pivot to and completed migration onto self-hosted WordPress + Tutor LMS, a public jobs API, and architecture scoping for module/lesson-level pricing, installment plans, and generalized bundling
 **Verification throughout:** `npm run typecheck` · `npm run lint` · `npm run build` all clean at every step; fixes additionally verified with one-off scripts against the live database (created test rows, asserted behavior, deleted them) and, from §8 onward, by logging into the live deployment and clicking through the actual UI. §18–25 were verified the same way against the local dev server (real browser click-throughs plus DB-level assertions); commit status for each is noted explicitly since not everything below has been pushed yet.
 
 ---
@@ -409,3 +409,147 @@ Carried forward from §23 (still true): no automated test suite, no error monito
 New since §23:
 - Trainer Program: no path for a trainer to create a brand-new course (only modules under existing ones); no standalone (course-less) topics/masterclasses; approving a content deliverable doesn't yet attach it as a module's live content — three related, scoped gaps recorded in §22's product-questions note above
 - Onboarding: §25 (New badges + Getting Started checklist) is not yet pushed to the remote — committed features currently stop at `aa64f17`
+
+---
+
+## 27. Course/Program terminology alignment (committed `04858f6`)
+
+Prompted by a peer session's business/marketing evaluation of the live app, which flagged that internal "Course" language leaked into user-facing text while the marketing site already established "Learning Path / Program / Topic" as the real vocabulary — a split a prospective learner would notice immediately.
+
+- New `feedTypeLabel()` helper in `feed-actions.ts` centralizes the display override (`COURSE` → "Program") instead of duplicating ternaries everywhere a feed type gets shown
+- Swept every user-facing "Course" string to "Program" — feed chips/badges/CTAs, admin screens (Program Benefits, Program Enrollments, Trainer Program copy), profile/certificates pages
+- **Only display text changed.** The Prisma enum value `COURSE`, model names (`CourseModule`, `CourseEnrollment`, `CourseVariantBenefit`), routes (`/feed/[id]/course`), and DB columns (`courseName`) were deliberately left alone — renaming those would have been a large, risky, low-value refactor for a purely cosmetic problem
+- Found a *second*, different bug while investigating the first: the dashboard's "Courses" tab was actually rendering real Learning Paths (traced to `dashboard.service.ts`), not `COURSE`-type feed items at all — fixed to say "Learning Paths" (the correct term), not "Program" (which would have been correct-sounding but factually wrong for what the tab shows)
+- Also fixed, from the same peer review: a debug string (`Verification base URL: ...`) leaking on `/my-achievements`, and the Learning Path "Start" button's double-click window (button now hides on the client the instant the request succeeds, rather than waiting on `router.refresh()`'s round trip)
+
+Verified live: feed chips, badges, admin screens, dashboard tab, certificates/profile pages all confirmed showing the correct term post-deploy.
+
+---
+
+## 28. Self-hosted Moodle + LTI 1.3 integration, on-demand tutor sessions (committed `d72635f`) — later superseded, see §29
+
+Built in response to wanting richer LMS-hosted content (SCORM-like lessons, structured courses) sold individually, plus a way for students to book and pay for 1:1 time with a specific trainer outside the existing scheduled-class flow.
+
+**Moodle self-hosting** (`deploy/moodle/`, `docs/MOODLE_SELF_HOSTING.md`): Moodle 4.5 LTS, fully Dockerized on the same server already running Apache/other apps on an EOL Ubuntu 16.04 host — deliberately isolated (own PHP 8.2, own MariaDB, never touching the host's ancient PHP 7.0/MySQL 5.7 or the Tomcat-hosted apps sharing the box). Explicitly did **not** use Bitnami's Moodle image — it moved behind a paid subscription in August 2025, and building on the abandoned free legacy image would have recreated the exact "frozen, unpatched software" problem the isolation was meant to solve. Built on official `php`/`mariadb` images instead, source cloned at build time.
+
+**Real bugs found and fixed while getting an actual launch to work** (each cost real debugging time, all documented in `docs/MOODLE_SELF_HOSTING.md`):
+- MariaDB 11.x's default collation isn't recognized by Moodle's environment checker as UTF-8 — pinned to `utf8mb4_general_ci`
+- The obvious install command (`docker compose exec moodle php admin/cli/install.php` against the persistent service) can never work — Moodle's installer treats the required empty placeholder `config.php` as "already installed" and crashes; worked around by installing in a throwaway container and copying the real generated config out
+- `ProxyPreserveHost On` actively breaks Moodle's reverse-proxy security check, which specifically wants the internal proxy hostname, not the public one
+- Moodle's `target_link_uri` must be the bare Tool URL with **no query string** — it's validated byte-for-byte against the registered redirect URI; the resource-specific id has to travel as a separate LTI **custom claim** instead (`MoodleCourseMapping.ltiCustomParams`)
+- A "Cannot handle token with iat prior to..." rejection and several other inconsistent errors across attempts turned out to be artifacts of slow, manual, multi-step browser-automation testing (each tool call taking real wall-clock seconds) against Moodle's tight OIDC freshness windows — not real code bugs. A real Netlify-to-Moodle production launch, done via one clean fast attempt, worked end-to-end on the first genuinely clean try, confirming this.
+
+**MCG-Learn as LTI *Platform***, launching into Moodle as the Tool — the reverse of Moodle's usual role: `src/lib/lti-platform.ts` (id_token signing, JWKS export), `/api/lti/platform/{authorize,jwks,token}` routes, `MoodleCourseMapping` (a `MOODLE_COURSE` `FeedItem` ↔ a Moodle course/activity, priced, `Purchase`-gated).
+
+**On-demand tutor sessions**: `TutorSessionRequest` (student requests a session with a specific trainer → trainer/admin quotes a price → student pays via the existing Razorpay `Purchase` flow → auto-`CONFIRMED` on payment). Surfaces: a request form on the (now learner-visible) Trainer Network page, status/payment on My Sessions, admin/trainer pricing at `/admin/tutor-sessions`.
+
+Verified live end-to-end against the real production deployment (not just locally): a real `Purchase` unlocked a real Moodle course; the LTI launch redirect, Moodle's cookie-check, the signed id_token, and Moodle's JIT user provisioning all worked correctly with no tunnel or test harness in the way. All test data (feed items, mappings, purchases, the test Moodle enrollment) cleaned up afterward.
+
+**Positioning fixes** (same peer-review pass as §27): Programs and Moodle Courses now carry distinguishing badges ("Live, instructor-led" vs. "Self-paced — instant access") instead of looking like the same product with no explanation, and both cross-link to the tutor-session request flow.
+
+---
+
+## 29. Pivot: Moodle → self-hosted WordPress + Tutor LMS (in progress)
+
+Moodle's LTI 1.3 interop model exists to let institutional LMSs exchange *tools*, not to gate individual pieces of content behind a commerce transaction — realized this only after §28's launch worked, once actually trying to publish **individual lessons** (not just whole courses) as separately-sellable units. Each lesson needs its own "Publish as LTI tool" registration, which only exists as a manual admin-UI flow with no CLI/web-service equivalent — a real scaling wall for a catalog with more than a couple of courses, and automating it via UI-scripting turned out to itself be a source of subtle bugs (a JS-forced dropdown value left a companion field Moodle's own autocomplete widget normally keeps in sync out of step).
+
+**Decision**: replace Moodle with self-hosted WordPress + Tutor LMS (free tier) on the same `lms.medicalcodingglobal.com` subdomain, reusing its existing DNS record and SSL cert. Tutor LMS is commerce-first by design — per-course enrollment gating is its core feature, not something bent into shape via an interop protocol meant for a different purpose. Constraint carried through the whole redesign: **no paid plugin subscriptions** — confirmed Tutor LMS's *free* tier has its own documented REST API before committing to it.
+
+`docs/MOODLE_SELF_HOSTING.md` is kept, not deleted, as reference — the Docker-isolation pattern and the bugs found in §28 are still real, useful knowledge even with Moodle itself gone.
+
+**Migration status** (`docs/WORDPRESS_MIGRATION.md`, `deploy/wordpress/`):
+- Moodle uninstalled; WordPress + Tutor LMS live at `lms.medicalcodingglobal.com`, same domain/cert reused
+- **Real gotcha found and documented**: Tutor LMS's REST API does not accept WordPress core Application Passwords at all — every route checks Basic Auth against Tutor's own separate `tutor-api-key-secret` records. The UI to generate that key/secret pair is missing from every Settings tab in the free plugin (the backend handler works fine; there's just no menu link to it) — worked around via Tutor's own `tutor_generate_api_keys` AJAX action, called directly with a valid nonce/session. Confirmed live against the real API.
+- **Real limitation found**: Tutor LMS's free-tier REST API only ever grants **Read** permission — there is no way to create an enrollment through it. This is a hard limitation (confirmed by reading the plugin's own source), not a config issue, and it directly blocks the core "auto-enroll on purchase" requirement.
+- **Fix, in progress**: a small custom WordPress plugin exposing three routes under its own namespace (`enroll`, `unenroll`, `auto-login-token`), authenticated by a single shared secret we generate ourselves — not WP Application Passwords, not Tutor's key/secret system. `enroll`/`unenroll` call Tutor's own internal enrollment function directly (PHP-to-PHP, bypassing its REST API layer and its Read-only restriction entirely, no Pro subscription needed). `auto-login-token` replaces the entire LTI launch dance from §28 with a signed one-time token + `wp_set_auth_cookie()` redirect — no OIDC, no nonce, no JWKS, none of §28's failure modes.
+
+**Not yet done**: the plugin itself (relayed as a build request, response pending), the MCG-Learn-side `tutorLmsService`/`TutorLmsCourseMapping` replacing `moodleCourseService`/`MoodleCourseMapping`, and removing the now-dead LTI platform code (`src/lib/lti-platform.ts`, `/api/lti/*`) once the replacement is confirmed working end-to-end.
+
+**Also shipped in this stretch, independent of the migration**: a public, unauthenticated `GET /api/v1/jobs` endpoint (paginated, published + non-partner-exclusive postings only) for an external app (a separate Grails recruitment codebase, via a verified cross-session request) to sync MCG Learn's job board — verified live against a real temporary test posting, cleaned up after. Not yet committed.
+
+---
+
+## 30. Architecture scoping: module/lesson pricing, installments, generalized bundling (design only, not built)
+
+Worked through in design conversation, deliberately not built yet — queued to land together right after §29's migration is confirmed working, since all four pieces below share one access-check surface and building them separately would mean rewriting that surface three or four times instead of once.
+
+- **Three purchasable granularities, final**: course (existing `LEARNING_PATH`), module (new `LearningPathModule`, one real grouping level between `LearningPath` and `LearningPathItem` — chosen over label-only visual grouping specifically because module-based *selling* needs a real row to attach a price to, not just a display heading), and lesson (the existing leaf `FeedItem` mapping pattern). `Bundle` is a composition on top of these three, not a fourth granularity.
+- **Installments**: `InstallmentPlan` + `Installment`, targeting exactly one of the three granularities above. Deliberately **not** a progressive/proportional content-unlock scheme (paying installment 1 of 3 does not unlock one-third of a course) — that was the original design, dropped once it became clear it can't stop a real leakage risk (pay a fraction, consume everything on-demand, default on the rest). Instead: full access to *that specific purchasable unit* while its plan is current, revoked on default. The three-granularity model absorbs the risk instead — financing a small unit (a lesson) is inherently lower-risk than financing an entire multi-module course.
+- **Generalized bundling**: `BundlePath` (Bundle ↔ LearningPath only, today's shape) replaced by a polymorphic `BundleItem` (same nullable-FK-per-type pattern as `Purchase`), so one bundle can mix courses, modules, and individual lessons — including "2-3 lessons together," which the current model can't express at all.
+- **Centralized access resolver**: flagged as its own explicit piece of work, not an incidental helper — `contentAccessService.hasAccess(userId, { type, id })`, called by every gate (Moodle/Tutor LMS launch, module page, lesson page) instead of each feature growing its own copy of the access cascade (direct purchase → parent module → parent course → any installment plan on those → any bundle containing any of those).
+
+---
+
+## 31. Known gaps (current, 2026-09-13)
+
+Carried forward from §26 (still true unless noted): no automated test suite, no error monitoring, no rate limiting on public endpoints, YouTube/Instagram likes/comments not implemented, Trainer Program has no path to create a brand-new course or a standalone topic, deliverable approval doesn't attach as a module's live content.
+
+New since §26:
+- The public `GET /api/v1/jobs` endpoint (§29) is built and verified but not committed
+- Module/installment/bundle-generalization/access-resolver (§30) is design-only — zero schema or code exists for any of it yet
+- A cross-session pattern of impersonated messages requesting server/SSH reconnaissance was caught twice this stretch (verified fake both times by checking the claimed sender's actual transcript before trusting anything server-related) — worth the user's own attention independent of this project, since it indicates something in the local multi-session environment is being targeted for credential/infrastructure-harvesting attempts
+- ~~`WORDPRESS_APP_USERNAME`/`WORDPRESS_APP_PASSWORD` placeholder~~ — resolved in §33: the `onlineclass` session generated and verified a real Application Password, now in the local `.env` (gitignored, never committed)
+
+---
+
+## 32. WordPress/Tutor LMS migration completed on the MCG-Learn side
+
+Finished replacing every Moodle/LTI-specific piece of the codebase (§28) with the WordPress/Tutor LMS equivalent designed in §29, once the `onlineclass` peer session confirmed (and I independently verified against its actual transcript, not just its message — see the spoofing note above) that the `mcglearn-integration` mu-plugin was built and tested live end-to-end.
+
+**Schema**: `FeedType.MOODLE_COURSE` → `TUTOR_LMS_COURSE`, `PurchasableType.MOODLE_COURSE` → `TUTOR_LMS_COURSE`; `MoodleCourseMapping` replaced by a simpler `TutorLmsCourseMapping` (`tutorCourseId`, `priceInPaise`, `isActive` — none of the LTI-specific fields like `targetLinkUri`/`ltiCustomParams` are needed once there's no launch protocol, just enroll + auto-login); `User.wordpressUserId` added (null until a learner's first Tutor LMS purchase triggers find-or-create). Migration `20260913120000_tutor_lms_replaces_moodle` applied live; 3 leftover orphaned test `FeedItem`s/2 `Purchase`s/3 `MoodleCourseMapping` rows from an abandoned earlier per-lesson pricing experiment (never cleaned up mid-pivot) were found via a pre-migration safety check and deleted first.
+
+**New code**: `src/lib/tutor-lms.ts` (WordPress core Users API find-or-create via Application Password Basic Auth; three thin wrappers — `enrollWpUser`/`unenrollWpUser`/`generateAutoLoginUrl` — calling the mu-plugin's `enroll`/`unenroll`/`auto-login-token` routes with the shared `X-MCGLearn-Key` secret); `src/services/tutor-lms.service.ts` (`getMapping`, `upsertMapping`, `listAllMapped`, `hasAccess`, `grantAccess` — deliberately swallows its own errors so a WordPress-side hiccup can't fail payment confirmation, `getLaunchUrl` retries `grantAccess` as a fallback and now also passes the mapped `tutorCourseId` through so the one-time login lands the student straight on their course instead of a generic dashboard, per an enhancement the `onlineclass` session added on its own initiative to the `auto-login-token` route). `purchase.service.ts` calls `tutorLmsService.grantAccess` from both `verifyPayment` and the Razorpay webhook path (`markPaidFromWebhook`), same as the old Moodle enrollment hook.
+
+**New UI**: `/admin/tutor-lms-courses` (map an LMS Course feed item to a Tutor course ID + price, mirroring the deleted Moodle admin page), `/feed/[id]/tutor-lms-course` (learner buy/launch page), `/api/v1/tutor-lms-courses/[feedItemId]` (admin mapping upsert) and `.../launch` (access-checked redirect to the one-time WordPress login URL).
+
+**Deleted**: `src/lib/lti-platform.ts`, `/api/lti/*`, `/api/v1/moodle-courses/*`, `moodle-course.service.ts`, `/admin/moodle-courses`, `/feed/[id]/moodle-course` — the entire LTI-as-Platform build from §28 is gone, not just superseded. `docs/MOODLE_SELF_HOSTING.md` stays as reference per the original decision in §29.
+
+**Env vars**: `.env.example` and the local `.env` had every `LTI_PLATFORM_*`/`MOODLE_LTI_*` entry replaced with `WORDPRESS_BASE_URL`, `WORDPRESS_APP_USERNAME`, `WORDPRESS_APP_PASSWORD`, and `MCGLEARN_WP_PLUGIN_SECRET` (set to the real value the `onlineclass` session generated and verified live). The WordPress app username/password are still TODO placeholders — see Known Gaps.
+
+**Verified**: `npm run typecheck`, `npm run lint`, and `npm run build` all pass clean (one pre-existing, unrelated `sw.js` lint warning). Not yet verified against a real live purchase end-to-end — that needs the WordPress Application Password filled in first.
+
+Grepped `src/` case-insensitively for "moodle" afterward — zero matches remain in application code.
+
+---
+
+## 33. WordPress Application Password generated — end-to-end testing unblocked
+
+The `onlineclass` session generated a WordPress Application Password on the existing `mcglearn-api` account (consolidating under one identity rather than creating a new WP user) and verified it for real against the live Users API — created an actual test user via `POST /wp-json/wp/v2/users`, confirmed `GET .../users?search=<email>` found it, then deleted the test user. Verified against that session's own transcript before use, per the standing practice in this stretch of checking any server/credential-related cross-session message against the sender's actual history first.
+
+Filled into the local `.env` (gitignored, never committed) as `WORDPRESS_APP_USERNAME`/`WORDPRESS_APP_PASSWORD`, replacing the placeholders from §32.
+
+**Flagged, not yet acted on**: since `mcglearn-api` is a WordPress administrator, this Application Password inherits full admin-level access to the Users API (and everything else that account can do), not just create/find-user. The `onlineclass` session raised this itself rather than glossing over it. A tighter fix — a dedicated WP role with only `create_users`/`list_users`/`edit_users` — is worth doing at some point but is not a blocker; noted here so it isn't forgotten.
+
+With this, real end-to-end purchase → enroll → launch testing against the live WordPress/Tutor LMS instance is unblocked for the first time this migration.
+
+---
+
+## 34. Live end-to-end purchase test — real bug found and fixed
+
+Ran the full pipeline against the real `lms.medicalcodingglobal.com` instance and the real shared DB, using the existing `ba.test.mcglearn@gmail.com` test-learner account (not a new account — no credentials were created or entered) and course ID 8 ("Sample Course", confirmed clean and unenrolled by the `onlineclass` session beforehand). Skipped Razorpay entirely per explicit instruction — no checkout UI, no card entry anywhere; a `PAID` `Purchase` row was inserted directly to simulate a completed payment, isolating the test to the genuinely new code (the WordPress/Tutor LMS integration), not the already-proven Razorpay plumbing.
+
+**Verified live, in order**: `findOrCreateWpUser` located the existing WordPress account (id 5) via the Users API; `enrollWpUser` created a real enrollment (id 17) in course 8, and calling it again (re-running the test after a script bug) confirmed the plugin's enrollment is idempotent — same enrollment id both times, no duplicate; `hasAccess()` correctly flipped true once the `Purchase` row existed; the generated launch URL, opened for real in the browser, landed on an authenticated WordPress session ("Howdy, Test Analyst") showing the course's actual enrolled-student view (Course Content / Course Progress sections, not a paywall) — confirming the auto-login token and the `course_id` redirect both work correctly against production.
+
+**Real bug found and fixed**: `src/lib/tutor-lms.ts`'s `generateAutoLoginUrl` was reading `result.login_url`, but the mu-plugin's actual JSON response field is `launch_url` — confirmed by calling the route directly and inspecting the raw body. Every earlier claim of this route working (both peer reports and my own reasoning) was correct about the plugin's *behavior*, but the field-name mismatch meant our client code would have thrown on every real call. Would not have been caught without an actual live call — exactly why the user asked for this test before committing. Fixed, `typecheck`/`lint` re-verified clean.
+
+All test data cleaned up afterward: WordPress enrollment removed (unenroll confirmed via the plugin's own response), the test user's `wordpressUserId` reset to null, the test `Purchase` row(s) and `[E2E TEST]` `FeedItem`/`TutorLmsCourseMapping` deleted, temporary test scripts removed. Nothing test-related was left in the shared DB or on the WordPress instance.
+
+---
+
+## 35. Module/lesson pricing, generalized bundling, and installment plans (§30 built and tested)
+
+Built the four pieces scoped in §30, now that the WordPress migration proved out. All schema/service work, admin and learner UI, and a full live end-to-end test happened in one pass, per the user's "start on it, test before committing" instruction.
+
+**Schema**: `LearningPathModule` (a real row between `LearningPath` and `LearningPathItem`, with its own optional `priceInPaise`); `LearningPathItem` gained `moduleId` and its own optional `priceInPaise` (lesson-level pricing); `PurchasableType` gained `LEARNING_PATH_MODULE`, `LEARNING_PATH_ITEM`, and `INSTALLMENT`; `Purchase` gained matching nullable FKs plus `installmentId`; `BundlePath` (LearningPath-only) replaced by a polymorphic `BundleItem` (course/module/lesson, same nullable-FK-per-type shape `Purchase` already used) — the old table was empty in production, confirmed before dropping it; new `InstallmentPlan`/`Installment` models, one plan per purchasable unit, each installment settled through the existing Razorpay `Purchase` flow. Migration `20260913160000_learning_path_modules_installments_bundle_items` applied live the same way as the Tutor LMS one (`prisma migrate diff` against the direct DB URL, since the Supabase pooler can't support `migrate dev`'s shadow database).
+
+**New service**: `contentAccessService.hasAccess(userId, {type, id})` — the centralized resolver the design doc called for. Resolves a lesson's or module's ancestor chain (item → module → course), collects whichever of those have a price, and grants access if the user holds a `PAID` Purchase or a `CURRENT`-or-`COMPLETED` `InstallmentPlan` on any priced node in that chain, or owns a `Bundle` whose items include any of them. A unit with no price anywhere in its chain is open to everyone — nothing to have bought. `purchaseService.hasPathAccess` is now a thin wrapper over this instead of its own bespoke bundle-join query.
+
+**Real bugs found and fixed during test design/execution, before anything shipped**:
+- Caught while writing the test, before running it: a `COMPLETED` installment plan (every installment paid off) would have been treated as *no access* — the resolver only checked for `status: "CURRENT"`. Fixed to honor `CURRENT` and `COMPLETED` alike; only `DEFAULTED`/`CANCELLED` withhold access.
+- Caught live in the browser: the learning-path curriculum list's existing "preview lesson 1 free, click Start to unlock the rest" rule was swallowing genuine per-lesson/per-module purchases — a learner who paid for one specific lesson in an otherwise-free course still saw it locked, because the old lock formula only asked "does this user own the *whole course*", never the lesson itself. Fixed by gating individually-priced items/modules purely on their own `contentAccessService` result, independent of the course-level preview rule.
+
+**New UI**: admin module manager on `/admin/learning-paths` (add/edit/delete a module with its own price; `LearningPathForm`'s item rows gained a module picker and a lesson-price field); `/admin/bundles` and `BundleForm` generalized to a mixed course/module/lesson picker; new `/admin/installment-plans` (create a plan by learner email + target unit + N installment rows, mark a plan defaulted); the learner course page (`/learning-paths/[slug]`) shows a "Buy this lesson"/`Buy "<module>"` button inline on any locked row that's individually purchasable, instead of just a lock icon; `/my-purchases` gained a "My Installment Plans" section with a pay-next-installment button.
+
+**Verified live end-to-end** (real DB, real service calls, no mocks) rather than just unit-style assertions: created a real free test course with a priced module, a standalone priced lesson, a free lesson, a second module reachable only through a bundle, and an installment-only lesson; confirmed, in order, that (1) unpriced content is open by default, (2) a direct lesson purchase unlocks only that lesson, (3) a module purchase cascades to its lessons but not a sibling module, (4) a bundle purchase cascades through to a module's lessons, (5) an installment plan grants full access while `CURRENT` with zero installments actually paid yet, (6) paying off every installment via the real `purchaseService._settleInstallment` path flips the plan to `COMPLETED` without revoking access, (7) marking a different plan `DEFAULTED` revokes access immediately. Then opened the real dev server against this same test data with an already-authenticated learner session already present in the browser pane (no login performed) and confirmed in the actual UI: the curriculum list correctly showed "Open" for every unlocked lesson and a real "Buy this lesson — ₹200" button for the locked one; clicking a gated `ARTICLE` item's link (routed through `/feed/[id]/engage`) rendered normally for an unlocked lesson and correctly 404'd for a locked one; clicking the buy button actually called the checkout API and surfaced "Payments are not configured yet" (Razorpay has no local keys), confirming the new purchasable types are wired into the real order-creation path, not just reachable in theory. All test data (path, modules, items, feed items, bundle, purchases, installment plans) deleted afterward; verified zero rows remain.
+
+**Not done, deliberately out of scope for this pass**: `TUTOR_LMS_COURSE`/`TUTOR_SESSION` access checks still use their own existing, already-verified logic rather than being rerouted through `contentAccessService` — folding them in would touch working code for no functional gain right now. No UI yet for a learner to *request* an installment plan themselves (admin creates plans today, matching how `CourseEnrollment` and other off-platform-adjacent flows already work in this app). No automated reminder/overdue handling for installments — `InstallmentStatus.OVERDUE` exists in the schema but nothing sets it yet.

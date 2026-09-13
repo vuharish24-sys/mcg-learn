@@ -1,0 +1,66 @@
+# Self-hosted WordPress + Tutor LMS (free tier), replacing the earlier Moodle
+# setup on the same lms.medicalcodingglobal.com subdomain — Moodle's LTI 1.3
+# interop model (built for institutional tool exchange between LMSs) was a
+# poor fit for per-lesson commerce-gated access, which is Tutor LMS's core
+# use case. See docs/MOODLE_SELF_HOSTING.md for the retired setup and the
+# real bugs found along the way (kept for reference, not deleted).
+#
+# Official WordPress image (Docker Official Images program — same
+# no-surprise-deprecation guarantee as the `php`/`mariadb` images used for
+# Moodle; unlike Bitnami, nothing here is at risk of going paywalled).
+#
+# Before first run:
+#   1. Replace every CHANGE_ME_* value with your own strong secret.
+#   2. This reuses the same isolation pattern as Moodle: separate DB
+#      container, never touches the host's ancient PHP 7.0 / MySQL 5.7 or
+#      Moodle's (now removed) containers.
+services:
+  wordpress-db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: "CHANGE_ME_DB_PASSWORD"
+      MARIADB_ROOT_PASSWORD: "CHANGE_ME_DB_ROOT_PASSWORD"
+    volumes:
+      - wordpress_db_data:/var/lib/mysql
+    networks:
+      - wordpress_net
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    restart: unless-stopped
+    depends_on:
+      - wordpress-db
+    environment:
+      WORDPRESS_DB_HOST: wordpress-db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: "CHANGE_ME_DB_PASSWORD"
+      # Needed since Apache terminates SSL and proxies plain HTTP to this
+      # container — without this, WordPress generates http:// links/redirects
+      # and browsers/mixed-content rules break the page.
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'https://lms.medicalcodingglobal.com');
+        define('WP_SITEURL', 'https://lms.medicalcodingglobal.com');
+        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+            $_SERVER['HTTPS'] = 'on';
+        }
+    ports:
+      # Loopback-only — the host's Apache is the sole public entry point,
+      # same as Moodle was on 8091. Reusing a fresh port (8092) rather than
+      # 8091 in case anything on the host still has that one cached/bound.
+      - "127.0.0.1:8092:80"
+    volumes:
+      - wordpress_data:/var/www/html
+    networks:
+      - wordpress_net
+
+volumes:
+  wordpress_db_data:
+  wordpress_data:
+
+networks:
+  wordpress_net:
+    driver: bridge

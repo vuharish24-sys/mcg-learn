@@ -6,47 +6,59 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 
+export type BundleItemType = "LEARNING_PATH" | "LEARNING_PATH_MODULE" | "LEARNING_PATH_ITEM";
+export type BundleItemOption = { type: BundleItemType; id: string; label: string };
+type BundleItemValue = { type: BundleItemType; id: string };
+
+function key(item: BundleItemValue): string {
+  return `${item.type}:${item.id}`;
+}
+
 export function BundleForm({
   bundleId,
-  learningPaths,
+  itemOptions,
   initial,
 }: {
   bundleId?: string;
-  learningPaths: { id: string; title: string }[];
+  itemOptions: BundleItemOption[];
   initial?: {
     title: string;
     slug: string;
     description: string;
     priceInPaise: number;
     isActive: boolean;
-    learningPathIds: string[];
+    items: BundleItemValue[];
   };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>(initial?.learningPathIds ?? []);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(initial?.items.map(key) ?? []);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function toggle(id: string) {
-    setSelectedIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  function toggle(k: string) {
+    setSelectedKeys((current) => (current.includes(k) ? current.filter((x) => x !== k) : [...current, k]));
   }
 
   async function submit(formData: FormData) {
-    if (selectedIds.length < 2) {
-      setError("Select at least 2 learning paths for a bundle");
+    if (selectedKeys.length < 2) {
+      setError("Select at least 2 items for a bundle");
       return;
     }
     setSubmitting(true);
     setError("");
     const priceRupees = Number(formData.get("priceRupees"));
+    const items: BundleItemValue[] = selectedKeys.map((k) => {
+      const [type, id] = k.split(":") as [BundleItemType, string];
+      return { type, id };
+    });
     const payload = {
       title: formData.get("title"),
       slug: formData.get("slug"),
       description: formData.get("description"),
       priceInPaise: Math.round(priceRupees * 100),
       isActive: formData.get("isActive") === "on",
-      learningPathIds: selectedIds,
+      items,
     };
 
     const endpoint = bundleId ? `/api/v1/bundles/${bundleId}` : "/api/v1/bundles";
@@ -67,7 +79,7 @@ export function BundleForm({
 
   async function remove() {
     if (!bundleId) return;
-    if (!window.confirm("Delete this bundle? Existing buyers keep access to the paths they already purchased.")) return;
+    if (!window.confirm("Delete this bundle? Existing buyers keep access to the items they already purchased.")) return;
     setSubmitting(true);
     const response = await fetch(`/api/v1/bundles/${bundleId}`, { method: "DELETE" });
     setSubmitting(false);
@@ -121,20 +133,23 @@ export function BundleForm({
             />
           </label>
           <div className="space-y-1.5">
-            <span className="block text-sm font-medium">Learning paths in this bundle (select at least 2)</span>
+            <span className="block text-sm font-medium">Items in this bundle (select at least 2 — courses, modules, or lessons)</span>
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-3 dark:border-slate-700">
-              {learningPaths.map((path) => (
-                <label key={path.id} className="flex items-center gap-2 text-sm font-normal">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(path.id)}
-                    onChange={() => toggle(path.id)}
-                    className="size-4 accent-teal-700"
-                  />
-                  {path.title}
-                </label>
-              ))}
-              {learningPaths.length === 0 && <p className="text-sm text-slate-500">No paid learning paths yet.</p>}
+              {itemOptions.map((option) => {
+                const k = key(option);
+                return (
+                  <label key={k} className="flex items-center gap-2 text-sm font-normal">
+                    <input
+                      type="checkbox"
+                      checked={selectedKeys.includes(k)}
+                      onChange={() => toggle(k)}
+                      className="size-4 accent-teal-700"
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
+              {itemOptions.length === 0 && <p className="text-sm text-slate-500">No paid courses, modules, or lessons yet.</p>}
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm font-medium">

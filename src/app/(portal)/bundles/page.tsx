@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { bundleService } from "@/services/bundle.service";
+import { bundleItemLabel, bundleService } from "@/services/bundle.service";
 import { purchaseService } from "@/services/purchase.service";
 import { BuyButton } from "@/components/purchases/buy-button";
 import { Badge } from "@/components/ui/badge";
@@ -34,9 +34,9 @@ export default async function BundlesPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-1.5">
-                  {bundle.paths.map((bp) => (
-                    <Badge key={bp.learningPathId} className="border border-slate-200 bg-transparent text-slate-600 dark:border-slate-700">
-                      {bp.learningPath.title}
+                  {bundle.items.map((item) => (
+                    <Badge key={item.id} className="border border-slate-200 bg-transparent text-slate-600 dark:border-slate-700">
+                      {bundleItemLabel(item)}
                     </Badge>
                   ))}
                 </div>

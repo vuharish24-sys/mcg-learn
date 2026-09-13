@@ -23,9 +23,9 @@ enum FeedType {
   JOB_POSTING
   COURSE
   /**
-   * A self-paced course actually delivered on the self-hosted Moodle LMS, launched via LTI. Distinct from COURSE (an off-platform, manually-enrolled program).
+   * A self-paced course actually delivered on the self-hosted WordPress + Tutor LMS instance. Distinct from COURSE (an off-platform, manually-enrolled program).
    */
-  MOODLE_COURSE
+  TUTOR_LMS_COURSE
 }
 
 /**
@@ -275,11 +275,16 @@ model User {
   appointmentsBooked         Appointment[]                   @relation("AppointmentLearner")
   availabilityRules          AvailabilityRule[]              @relation("AvailabilityRuleHost")
   purchases                  Purchase[]
+  installmentPlans           InstallmentPlan[]
   classSessionAttendances    ClassSessionAttendance[]
   moduleCompletions          UserModuleCompletion[]
   contentUsageEvents         ContentUsageEvent[]
   courseEnrollments          CourseEnrollment[]
   tutorSessionRequests       TutorSessionRequest[]
+  /**
+   * WordPress user ID for this learner, once find-or-created via the WP core Users API. Null until their first Tutor LMS course purchase.
+   */
+  wordpressUserId            Int?                            @map("wordpress_user_id")
   createdAt                  DateTime                        @default(now()) @map("created_at")
   updatedAt                  DateTime                        @updatedAt @map("updated_at")
 
@@ -360,9 +365,9 @@ model FeedItem {
   trainerProposalsTargeting TrainerProposal[]        @relation("ProposalTargetCourse")
   enrollments               CourseEnrollment[]
   /**
-   * MOODLE_COURSE only: the Moodle-side course this FeedItem launches into.
+   * TUTOR_LMS_COURSE only: the WordPress/Tutor LMS course this FeedItem grants access to.
    */
-  moodleCourseMapping       MoodleCourseMapping?
+  tutorLmsCourseMapping     TutorLmsCourseMapping?
   purchases                 Purchase[]
   createdAt                 DateTime                 @default(now()) @map("created_at")
   updatedAt                 DateTime                 @updatedAt @map("updated_at")
@@ -1263,6 +1268,7 @@ model LearningPath {
    */
   priceInPaise            Int?                            @map("price_in_paise")
   items                   LearningPathItem[]
+  modules                 LearningPathModule[]
   progress                UserLearningProgress[]
   itemCompletions         UserPathItemCompletion[]
   quizAttempts            QuizAttempt[]
@@ -1270,7 +1276,8 @@ model LearningPath {
   badges                  Badge[]
   referralCampaignCourses ReferralCampaignCourse[]
   commissionTransactions  ReferralCommissionTransaction[]
-  bundlePaths             BundlePath[]
+  bundleItems             BundleItem[]
+  installmentPlans        InstallmentPlan[]
   purchases               Purchase[]
   createdAt               DateTime                        @default(now()) @map("created_at")
   updatedAt               DateTime                        @updatedAt @map("updated_at")
@@ -1280,7 +1287,35 @@ model LearningPath {
 }
 
 /**
- * A combo offer bundling several LearningPaths at one price, sold as a single purchase.
+ * A real grouping level between LearningPath and LearningPathItem, chosen
+ * over a label-only visual grouping specifically because module-based
+ * *selling* needs a real row to attach a price to. Null priceInPaise = not
+ * separately for sale — its items are reachable only via the whole course
+ * (if that's priced) or individually (if an item under it has its own
+ * price). See docs/SESSION_CHANGELOG.md §30/§35 for the pricing model.
+ */
+model LearningPathModule {
+  id               String            @id @default(cuid())
+  learningPathId   String            @map("learning_path_id")
+  learningPath     LearningPath      @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  sortOrder        Int               @default(0) @map("sort_order")
+  priceInPaise     Int?              @map("price_in_paise")
+  items            LearningPathItem[]
+  purchases        Purchase[]
+  installmentPlans InstallmentPlan[]
+  bundleItems      BundleItem[]
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  @@index([learningPathId, sortOrder])
+  @@map("learning_path_modules")
+}
+
+/**
+ * A combo offer bundling several purchasable units (courses, modules, and/or
+ * individual lessons — any mix) at one price, sold as a single purchase.
  */
 model Bundle {
   id           String       @id @default(cuid())
@@ -1289,7 +1324,7 @@ model Bundle {
   description  String
   priceInPaise Int          @map("price_in_paise")
   isActive     Boolean      @default(true) @map("is_active")
-  paths        BundlePath[]
+  items        BundleItem[]
   purchases    Purchase[]
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -1297,27 +1332,54 @@ model Bundle {
   @@map("bundles")
 }
 
-model BundlePath {
-  bundleId       String       @map("bundle_id")
-  bundle         Bundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
-  learningPathId String       @map("learning_path_id")
-  learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+/**
+ * One entry in a Bundle — exactly one of the three FKs below is set, mirroring
+ * the same nullable-FK-per-type pattern Purchase already uses. Replaces the
+ * old BundlePath (LearningPath-only) so a bundle can mix courses, modules,
+ * and individual lessons, e.g. "2-3 lessons together".
+ */
+model BundleItem {
+  id                   String              @id @default(cuid())
+  bundleId             String              @map("bundle_id")
+  bundle               Bundle              @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  learningPathId       String?             @map("learning_path_id")
+  learningPath         LearningPath?       @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  learningPathModuleId String?             @map("learning_path_module_id")
+  learningPathModule   LearningPathModule? @relation(fields: [learningPathModuleId], references: [id], onDelete: Cascade)
+  learningPathItemId   String?             @map("learning_path_item_id")
+  learningPathItem     LearningPathItem?   @relation(fields: [learningPathItemId], references: [id], onDelete: Cascade)
+  createdAt            DateTime            @default(now()) @map("created_at")
 
-  @@id([bundleId, learningPathId])
-  @@map("bundle_paths")
+  @@unique([bundleId, learningPathId, learningPathModuleId, learningPathItemId])
+  @@index([learningPathId])
+  @@index([learningPathModuleId])
+  @@index([learningPathItemId])
+  @@map("bundle_items")
 }
 
 enum PurchasableType {
   LEARNING_PATH
+  /**
+   * A LearningPathModule bought on its own, separate from its whole course.
+   */
+  LEARNING_PATH_MODULE
+  /**
+   * A single LearningPathItem (lesson) bought on its own.
+   */
+  LEARNING_PATH_ITEM
   BUNDLE
   /**
-   * A MOODLE_COURSE FeedItem — grants an LTI launch entitlement into the mapped Moodle course.
+   * A TUTOR_LMS_COURSE FeedItem — grants an enrollment into the mapped WordPress/Tutor LMS course.
    */
-  MOODLE_COURSE
+  TUTOR_LMS_COURSE
   /**
    * An on-demand tutor session, priced per-request once a trainer/admin quotes it.
    */
   TUTOR_SESSION
+  /**
+   * One Installment of an InstallmentPlan being paid off.
+   */
+  INSTALLMENT
 }
 
 enum PurchaseStatus {
@@ -1339,10 +1401,20 @@ model Purchase {
   purchasableType       PurchasableType      @map("purchasable_type")
   learningPathId        String?              @map("learning_path_id")
   learningPath          LearningPath?        @relation(fields: [learningPathId], references: [id])
+  /**
+   * LEARNING_PATH_MODULE only: the module bought on its own.
+   */
+  learningPathModuleId  String?              @map("learning_path_module_id")
+  learningPathModule    LearningPathModule?  @relation(fields: [learningPathModuleId], references: [id])
+  /**
+   * LEARNING_PATH_ITEM only: the single lesson bought on its own.
+   */
+  learningPathItemId    String?              @map("learning_path_item_id")
+  learningPathItem      LearningPathItem?    @relation(fields: [learningPathItemId], references: [id])
   bundleId              String?              @map("bundle_id")
   bundle                Bundle?              @relation(fields: [bundleId], references: [id])
   /**
-   * MOODLE_COURSE only: the FeedItem (type MOODLE_COURSE) being unlocked.
+   * TUTOR_LMS_COURSE only: the FeedItem (type TUTOR_LMS_COURSE) being unlocked.
    */
   feedItemId            String?              @map("feed_item_id")
   feedItem              FeedItem?            @relation(fields: [feedItemId], references: [id])
@@ -1351,6 +1423,11 @@ model Purchase {
    */
   tutorSessionRequestId String?              @unique @map("tutor_session_request_id")
   tutorSessionRequest   TutorSessionRequest? @relation(fields: [tutorSessionRequestId], references: [id])
+  /**
+   * INSTALLMENT only: the specific Installment this payment settles.
+   */
+  installmentId         String?              @unique @map("installment_id")
+  installment           Installment?         @relation(fields: [installmentId], references: [id])
   amountPaise           Int                  @map("amount_paise")
   status                PurchaseStatus       @default(PENDING)
   razorpayOrderId       String               @unique @map("razorpay_order_id")
@@ -1360,39 +1437,102 @@ model Purchase {
 
   @@index([userId])
   @@index([learningPathId])
+  @@index([learningPathModuleId])
+  @@index([learningPathItemId])
   @@index([bundleId])
   @@index([feedItemId])
   @@map("purchases")
 }
 
-/**
- * Links a MOODLE_COURSE FeedItem to the actual course on the self-hosted
- * Moodle instance. The LTI launch endpoint uses this to know which Moodle
- * course to open once a Purchase confirms access.
- */
-model MoodleCourseMapping {
-  id                   String   @id @default(cuid())
-  feedItemId           String   @unique @map("feed_item_id")
-  feedItem             FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
-  moodleCourseId       Int      @map("moodle_course_id")
-  /**
-   * Moodle's course idnumber/shortname, shown to admins for cross-checking against the Moodle UI — not used programmatically.
-   */
-  moodleCourseIdNumber String?  @map("moodle_course_id_number")
-  /**
-   * The exact target_link_uri Moodle's "publish as LTI tool" screen gives for this course — required before launch works, but nullable so the mapping (and its price) can be created before that registration step is done. Must be the bare Tool URL with no query string; Moodle validates it byte-for-byte against the registered redirect URI (confirmed on a real launch attempt).
-   */
-  targetLinkUri        String?  @map("target_link_uri")
-  /**
-   * Moodle's "Custom properties" for this published resource (e.g. "id=76205b0e-..."), query-string-shaped — sent as the LTI custom claim, NOT appended to targetLinkUri (Moodle rejects a target_link_uri with a query string).
-   */
-  ltiCustomParams      String?  @map("lti_custom_params")
-  priceInPaise         Int      @map("price_in_paise")
-  isActive             Boolean  @default(true) @map("is_active")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+enum InstallmentPlanStatus {
+  CURRENT
+  COMPLETED
+  DEFAULTED
+  CANCELLED
+}
 
-  @@map("moodle_course_mappings")
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+/**
+ * Pay-in-parts access to exactly one purchasable unit (course, module, or
+ * lesson — exactly one of the three FKs below is set). Deliberately NOT a
+ * progressive/proportional unlock: while CURRENT, the plan grants full
+ * access to that one unit (same as a direct Purchase of it would), because a
+ * partial unlock can't stop a learner from paying a fraction and consuming
+ * everything on-demand before defaulting. The three-granularity model
+ * absorbs that risk instead — financing a single lesson is inherently
+ * lower-risk than financing an entire course. contentAccessService honors
+ * both CURRENT (still paying) and COMPLETED (fully paid — owned outright)
+ * plans; a DEFAULTED plan loses access immediately.
+ */
+model InstallmentPlan {
+  id                   String                @id @default(cuid())
+  userId               String                @map("user_id") @db.Uuid
+  user                 User                  @relation(fields: [userId], references: [id])
+  learningPathId       String?               @map("learning_path_id")
+  learningPath         LearningPath?         @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  learningPathModuleId String?               @map("learning_path_module_id")
+  learningPathModule   LearningPathModule?   @relation(fields: [learningPathModuleId], references: [id], onDelete: Cascade)
+  learningPathItemId   String?               @map("learning_path_item_id")
+  learningPathItem     LearningPathItem?     @relation(fields: [learningPathItemId], references: [id], onDelete: Cascade)
+  totalAmountPaise     Int                   @map("total_amount_paise")
+  status               InstallmentPlanStatus @default(CURRENT)
+  installments         Installment[]
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@index([learningPathId])
+  @@index([learningPathModuleId])
+  @@index([learningPathItemId])
+  @@map("installment_plans")
+}
+
+/**
+ * One payable slice of an InstallmentPlan. Paid the same way as everything
+ * else — via the existing Razorpay Purchase flow, purchasableType INSTALLMENT.
+ */
+model Installment {
+  id          String            @id @default(cuid())
+  planId      String            @map("plan_id")
+  plan        InstallmentPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  sequence    Int
+  amountPaise Int               @map("amount_paise")
+  dueDate     DateTime          @map("due_date")
+  status      InstallmentStatus @default(PENDING)
+  paidAt      DateTime?         @map("paid_at")
+  purchase    Purchase?
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@unique([planId, sequence])
+  @@map("installments")
+}
+
+/**
+ * Links a TUTOR_LMS_COURSE FeedItem to the actual course on the self-hosted
+ * WordPress + Tutor LMS instance. Replaces MoodleCourseMapping — no launch
+ * protocol fields needed (no target URL, no custom params) since access is
+ * just an enroll API call plus a one-time auto-login redirect, not an LTI
+ * launch. See docs/WORDPRESS_MIGRATION.md.
+ */
+model TutorLmsCourseMapping {
+  id            String   @id @default(cuid())
+  feedItemId    String   @unique @map("feed_item_id")
+  feedItem      FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  /**
+   * Tutor LMS's own numeric course (WordPress post) ID.
+   */
+  tutorCourseId Int      @map("tutor_course_id")
+  priceInPaise  Int      @map("price_in_paise")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("tutor_lms_course_mappings")
 }
 
 enum SessionRequestStatus {
@@ -1444,17 +1584,29 @@ model TutorSessionRequest {
 }
 
 model LearningPathItem {
-  id             String       @id @default(cuid())
-  learningPathId String       @map("learning_path_id")
-  learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
-  feedItemId     String       @map("feed_item_id")
-  feedItem       FeedItem     @relation(fields: [feedItemId], references: [id])
-  sortOrder      Int          @map("sort_order")
-  isRequired     Boolean      @default(true) @map("is_required")
-  passPercentage Int?         @map("pass_percentage")
+  id               String              @id @default(cuid())
+  learningPathId   String              @map("learning_path_id")
+  learningPath     LearningPath        @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  feedItemId       String              @map("feed_item_id")
+  feedItem         FeedItem            @relation(fields: [feedItemId], references: [id])
+  moduleId         String?             @map("module_id")
+  module           LearningPathModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  sortOrder        Int                 @map("sort_order")
+  isRequired       Boolean             @default(true) @map("is_required")
+  passPercentage   Int?                @map("pass_percentage")
+  /**
+   * Price in paise for buying just this one lesson. Null = not separately
+   * for sale — reachable only via its module or the whole course, if those
+   * are priced.
+   */
+  priceInPaise     Int?                @map("price_in_paise")
+  purchases        Purchase[]
+  installmentPlans InstallmentPlan[]
+  bundleItems      BundleItem[]
 
   @@unique([learningPathId, feedItemId])
   @@index([learningPathId, sortOrder])
+  @@index([moduleId])
   @@map("learning_path_items")
 }
 

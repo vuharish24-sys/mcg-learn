@@ -1,7 +1,7 @@
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { getApiUser } from "@/lib/auth";
-import { moodleCourseMappingSchema } from "@/lib/validation";
-import { moodleCourseService } from "@/services/moodle-course.service";
+import { tutorLmsCourseMappingSchema } from "@/lib/validation";
+import { tutorLmsService } from "@/services/tutor-lms.service";
 
 type Params = { params: Promise<{ feedItemId: string }> };
 
@@ -12,9 +12,9 @@ export async function POST(request: Request, { params }: Params) {
 
   try {
     const { feedItemId } = await params;
-    const values = moodleCourseMappingSchema.parse(await request.json());
-    const mapping = await moodleCourseService.upsertMapping(feedItemId, values);
-    return apiSuccess(mapping, 201);
+    const values = tutorLmsCourseMappingSchema.parse(await request.json());
+    const mapping = await tutorLmsService.upsertMapping(feedItemId, values);
+    return apiSuccess(mapping);
   } catch (error) {
     return handleApiError(error);
   }

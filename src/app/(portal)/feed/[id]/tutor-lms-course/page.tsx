@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { moodleCourseService } from "@/services/moodle-course.service";
+import { tutorLmsService } from "@/services/tutor-lms.service";
 import { BuyButton } from "@/components/purchases/buy-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,16 +13,16 @@ function formatRupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString("en-IN")}`;
 }
 
-export default async function FeedMoodleCoursePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function FeedTutorLmsCoursePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await params;
-  const item = await prisma.feedItem.findFirst({ where: { id, type: "MOODLE_COURSE" } });
+  const item = await prisma.feedItem.findFirst({ where: { id, type: "TUTOR_LMS_COURSE" } });
   if (!item) notFound();
   if (item.status !== "PUBLISHED" && user.role.key !== "ADMIN") notFound();
 
   const [mapping, hasAccess] = await Promise.all([
-    moodleCourseService.getMapping(id),
-    moodleCourseService.hasAccess(user.id, id),
+    tutorLmsService.getMapping(id),
+    tutorLmsService.hasAccess(user.id, id),
   ]);
   if (!mapping) notFound();
 
@@ -52,14 +52,14 @@ export default async function FeedMoodleCoursePage({ params }: { params: Promise
           )}
           {hasAccess ? (
             <a
-              href={`/api/v1/moodle-courses/${id}/launch`}
+              href={`/api/v1/tutor-lms-courses/${id}/launch`}
               className={buttonVariants({ variant: "gradient" })}
             >
               Launch course <ExternalLink className="size-4" />
             </a>
           ) : (
             <BuyButton
-              purchasableType="MOODLE_COURSE"
+              purchasableType="TUTOR_LMS_COURSE"
               id={id}
               label={`Buy for ${formatRupees(mapping.priceInPaise)}`}
               learner={{ fullName: user.fullName, email: user.email, phone: user.phone }}

@@ -7,7 +7,7 @@ import { parseFeedContent } from "@/lib/feed-actions";
 import { formatDate } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getProfileCompleteness } from "@/services/profile.service";
-import { purchaseService } from "@/services/purchase.service";
+import { contentAccessService } from "@/services/content-access.service";
 import { benefitService, computeEffectivePrice } from "@/services/benefit.service";
 import { trainerProgramService } from "@/services/trainer-program.service";
 import { courseEnrollmentService } from "@/services/course-enrollment.service";
@@ -37,7 +37,7 @@ export default async function FeedCoursePage({
   const path = learningPathId
     ? await prisma.learningPath.findUnique({ where: { id: learningPathId } })
     : null;
-  if (path?.priceInPaise && !(await purchaseService.hasPathAccess(user.id, path.id))) notFound();
+  if (path && !(await contentAccessService.hasItemAccess(user.id, path.id, item.id))) notFound();
 
   const { course } = parseFeedContent(item.content);
 

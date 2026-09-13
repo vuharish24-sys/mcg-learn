@@ -7,8 +7,9 @@ import { pathCoverImageUrl, pathPreviewImages } from "@/lib/learning-path-media"
 import { feedService } from "@/services/feed.service";
 import { learningPathService } from "@/services/learning-path.service";
 import { purchaseService } from "@/services/purchase.service";
+import { contentAccessService } from "@/services/content-access.service";
 import { LearningPathStartButton } from "@/components/learning-path/learning-path-start-button";
-import { PathCurriculumRow } from "@/components/learning-path/path-curriculum-row";
+import { PathCurriculumRow, type CurriculumBuyOption } from "@/components/learning-path/path-curriculum-row";
 import { BuyButton } from "@/components/purchases/buy-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,16 @@ export default async function LearningPathDetailPage({
   const started = (progress?.status === "IN_PROGRESS" || progress?.status === "COMPLETED") && hasAccess;
   const cover = pathCoverImageUrl(path, path.items);
   const previews = pathPreviewImages(path.items, 5);
+
+  const itemAccess = new Map(
+    await Promise.all(
+      itemsWithStatus.map(
+        async (item) =>
+          [item.id, await contentAccessService.hasAccess(user.id, { type: "LEARNING_PATH_ITEM", id: item.id })] as const,
+      ),
+    ),
+  );
+  const learner = { fullName: user.fullName, email: user.email, phone: user.phone };
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -136,7 +147,31 @@ export default async function LearningPathDetailPage({
         <CardContent className="divide-y px-4 dark:divide-slate-800 sm:px-6">
           {itemsWithStatus.map((item, index) => {
             const href = getPathFeedItemHref(item.feedItem.id, item.feedItem.type, path.id);
-            const locked = !hasAccess || (!started && index > 0);
+            const ownAccess = itemAccess.get(item.id) ?? false;
+            const itemModule = path.modules.find((m) => m.id === item.moduleId);
+            // An item/module priced on its own is gated purely by ownAccess —
+            // the "preview item 1, then click Start" nudge below only makes
+            // sense for content whose only gate is the whole course's price.
+            const individuallyPriceable = Boolean(item.priceInPaise || itemModule?.priceInPaise);
+            const locked = individuallyPriceable ? !ownAccess : hasAccess ? !started && index > 0 : !ownAccess;
+            let buyOption: CurriculumBuyOption | null = null;
+            if (locked && !ownAccess) {
+              if (item.priceInPaise) {
+                buyOption = {
+                  purchasableType: "LEARNING_PATH_ITEM",
+                  id: item.id,
+                  priceInPaise: item.priceInPaise,
+                  label: "Buy this lesson",
+                };
+              } else if (itemModule?.priceInPaise) {
+                buyOption = {
+                  purchasableType: "LEARNING_PATH_MODULE",
+                  id: itemModule.id,
+                  priceInPaise: itemModule.priceInPaise,
+                  label: `Buy "${itemModule.title}"`,
+                };
+              }
+            }
             return (
               <PathCurriculumRow
                 key={item.id}
@@ -147,6 +182,8 @@ export default async function LearningPathDetailPage({
                 isRequired={item.isRequired}
                 bestScore={item.bestScore}
                 feedItem={item.feedItem}
+                buyOption={buyOption}
+                learner={learner}
               />
             );
           })}

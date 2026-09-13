@@ -8,15 +8,25 @@ import { Input, Textarea, fieldClassName } from "@/components/ui/input";
 import { MediaUploadField } from "@/components/media/media-upload-field";
 
 type FeedOption = { value: string; label: string; type: string };
-type PathItem = { feedItemId: string; sortOrder: number; isRequired: boolean; passPercentage: string };
+type ModuleOption = { value: string; label: string };
+type PathItem = {
+  feedItemId: string;
+  sortOrder: number;
+  isRequired: boolean;
+  passPercentage: string;
+  moduleId: string;
+  priceRupees: string;
+};
 
 export function LearningPathForm({
   feedItems,
+  modules = [],
   initial,
   endpoint,
   method = "POST",
 }: {
   feedItems: FeedOption[];
+  modules?: ModuleOption[];
   initial?: {
     title: string;
     slug: string;
@@ -44,7 +54,7 @@ export function LearningPathForm({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<PathItem[]>(
-    initial?.items ?? [{ feedItemId: "", sortOrder: 0, isRequired: true, passPercentage: "" }],
+    initial?.items ?? [{ feedItemId: "", sortOrder: 0, isRequired: true, passPercentage: "", moduleId: "", priceRupees: "" }],
   );
   const [requiredQuizFeedItemId, setRequiredQuizFeedItemId] = useState(
     initial?.requiredQuizFeedItemId ?? "",
@@ -60,7 +70,10 @@ export function LearningPathForm({
     .filter((feed): feed is FeedOption => Boolean(feed));
 
   function addItem() {
-    setItems((current) => [...current, { feedItemId: "", sortOrder: current.length, isRequired: true, passPercentage: "" }]);
+    setItems((current) => [
+      ...current,
+      { feedItemId: "", sortOrder: current.length, isRequired: true, passPercentage: "", moduleId: "", priceRupees: "" },
+    ]);
   }
 
   function removeItem(index: number) {
@@ -100,6 +113,8 @@ export function LearningPathForm({
           sortOrder: index,
           isRequired: item.isRequired,
           passPercentage: item.passPercentage ? Number(item.passPercentage) : null,
+          moduleId: item.moduleId || null,
+          priceInPaise: item.priceRupees ? Math.round(Number(item.priceRupees) * 100) : null,
         })),
     };
 
@@ -274,6 +289,23 @@ export function LearningPathForm({
                 <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={item.isRequired} onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, isRequired: e.target.checked } : row))} /> Required</label>
                 <Input placeholder="Pass %" value={item.passPercentage} onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, passPercentage: e.target.value } : row))} />
                 <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}><Trash2 className="size-4" /></Button>
+                <select
+                  value={item.moduleId}
+                  onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, moduleId: e.target.value } : row))}
+                  className={`${fieldClassName} sm:col-span-2`}
+                >
+                  <option value="">No module (directly under course)</option>
+                  {modules.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+                <Input
+                  placeholder="Lesson price ₹ (optional)"
+                  type="number"
+                  min={1}
+                  step="0.01"
+                  value={item.priceRupees}
+                  onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, priceRupees: e.target.value } : row))}
+                  className="sm:col-span-2"
+                />
               </div>
             ))}
           </div>

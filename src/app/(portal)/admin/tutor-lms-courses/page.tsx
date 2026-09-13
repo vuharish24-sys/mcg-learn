@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { moodleCourseService } from "@/services/moodle-course.service";
+import { tutorLmsService } from "@/services/tutor-lms.service";
 import { ResourceCreateForm } from "@/components/forms/resource-create-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,12 +10,12 @@ function formatRupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString("en-IN")}`;
 }
 
-export default async function AdminMoodleCoursesPage() {
+export default async function AdminTutorLmsCoursesPage() {
   await requireRole(["ADMIN"]);
 
   const [feedItems, mappings] = await Promise.all([
-    prisma.feedItem.findMany({ where: { type: "MOODLE_COURSE" }, orderBy: { title: "asc" } }),
-    moodleCourseService.listAllMapped(),
+    prisma.feedItem.findMany({ where: { type: "TUTOR_LMS_COURSE" }, orderBy: { title: "asc" } }),
+    tutorLmsService.listAllMapped(),
   ]);
   const mappingByFeedItem = new Map(mappings.map((m) => [m.feedItemId, m]));
 
@@ -23,14 +23,11 @@ export default async function AdminMoodleCoursesPage() {
     <div className="space-y-6">
       <div>
         <Link href="/admin" className="text-sm font-semibold text-teal-700">← Administration</Link>
-        <h1 className="mt-2 text-3xl font-bold">Moodle Courses</h1>
+        <h1 className="mt-2 text-3xl font-bold">Tutor LMS Courses</h1>
         <p className="mt-1 max-w-2xl text-slate-500">
-          Map an LMS Course feed item to its actual course on the self-hosted Moodle instance, set
-          its price, and paste in the exact launch URL and custom properties from Moodle&rsquo;s
-          &ldquo;Publish as LTI tool&rdquo; screen once that course is registered there. The launch
-          URL must be the bare Tool URL with no query string — Moodle rejects one that has a query
-          string appended (confirmed on a real launch attempt); the resource-specific &ldquo;id&rdquo;
-          goes in Custom properties instead.
+          Map an LMS Course feed item to its actual course on the self-hosted WordPress + Tutor LMS
+          instance, and set its price. On purchase, the student is automatically enrolled and can
+          launch straight into the course — no separate WordPress login needed.
         </p>
       </div>
 
@@ -54,9 +51,7 @@ export default async function AdminMoodleCoursesPage() {
               <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
                 <CardTitle className="text-base">{item.title}</CardTitle>
                 {mapping ? (
-                  <Badge className={mapping.targetLinkUri ? "" : "border border-amber-200 bg-amber-50 text-amber-700"}>
-                    {mapping.targetLinkUri ? "Ready to launch" : "Missing launch URL"}
-                  </Badge>
+                  <Badge>Mapped</Badge>
                 ) : (
                   <Badge className="border border-slate-200 bg-slate-50 text-slate-600">Not mapped</Badge>
                 )}
@@ -64,34 +59,21 @@ export default async function AdminMoodleCoursesPage() {
               <CardContent className="space-y-2">
                 {mapping && (
                   <p className="text-sm text-slate-500">
-                    Moodle course ID {mapping.moodleCourseId} · {formatRupees(mapping.priceInPaise)}
+                    Tutor course ID {mapping.tutorCourseId} · {formatRupees(mapping.priceInPaise)}
                     {mapping.isActive ? "" : " · inactive"}
                   </p>
                 )}
                 <ResourceCreateForm
-                  title={mapping ? "Edit mapping" : "Map to Moodle course"}
-                  endpoint={`/api/v1/moodle-courses/${item.id}`}
+                  title={mapping ? "Edit mapping" : "Map to Tutor LMS course"}
+                  endpoint={`/api/v1/tutor-lms-courses/${item.id}`}
                   method="POST"
                   initialValues={{
-                    moodleCourseId: mapping ? String(mapping.moodleCourseId) : "",
-                    moodleCourseIdNumber: mapping?.moodleCourseIdNumber ?? "",
-                    targetLinkUri: mapping?.targetLinkUri ?? "",
-                    ltiCustomParams: mapping?.ltiCustomParams ?? "",
+                    tutorCourseId: mapping ? String(mapping.tutorCourseId) : "",
                     priceInPaise: mapping ? String(mapping.priceInPaise) : "",
                     isActive: mapping?.isActive ?? true,
                   }}
                   fields={[
-                    { name: "moodleCourseId", label: "Moodle course ID", type: "number", required: true },
-                    { name: "moodleCourseIdNumber", label: "Moodle idnumber/shortname (optional, for reference)" },
-                    {
-                      name: "targetLinkUri",
-                      label: "Launch URL — Tool URL only, no query string (from Moodle's Publish as LTI tool screen)",
-                      type: "url",
-                    },
-                    {
-                      name: "ltiCustomParams",
-                      label: "Custom properties (e.g. id=76205b0e-...) — from the same Moodle screen",
-                    },
+                    { name: "tutorCourseId", label: "Tutor LMS course ID (the WordPress post ID)", type: "number", required: true },
                     { name: "priceInPaise", label: "Price in paise (e.g. 150000 = ₹1,500)", type: "number", required: true },
                     { name: "isActive", label: "For sale", type: "checkbox", defaultValue: "true" },
                   ]}

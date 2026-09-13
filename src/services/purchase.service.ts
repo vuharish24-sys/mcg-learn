@@ -2,14 +2,19 @@ import type { PurchasableType } from "@prisma/client";
 import { AppValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getRazorpayClient, verifyCheckoutSignature } from "@/lib/razorpay";
+import { contentAccessService } from "@/services/content-access.service";
+import { tutorLmsService } from "@/services/tutor-lms.service";
 
 export const purchaseService = {
   async createOrder(userId: string, purchasableType: PurchasableType, id: string) {
     let amountPaise: number;
     let learningPathId: string | null = null;
+    let learningPathModuleId: string | null = null;
+    let learningPathItemId: string | null = null;
     let bundleId: string | null = null;
     let feedItemId: string | null = null;
     let tutorSessionRequestId: string | null = null;
+    let installmentId: string | null = null;
 
     if (purchasableType === "LEARNING_PATH") {
       const path = await prisma.learningPath.findUnique({ where: { id } });
@@ -17,16 +22,37 @@ export const purchaseService = {
       if (!path.priceInPaise) throw new AppValidationError("This learning path is not for sale");
       amountPaise = path.priceInPaise;
       learningPathId = path.id;
+    } else if (purchasableType === "LEARNING_PATH_MODULE") {
+      const learningPathModule = await prisma.learningPathModule.findUnique({ where: { id } });
+      if (!learningPathModule) throw new AppValidationError("Module not found");
+      if (!learningPathModule.priceInPaise) throw new AppValidationError("This module is not for sale on its own");
+      amountPaise = learningPathModule.priceInPaise;
+      learningPathModuleId = learningPathModule.id;
+    } else if (purchasableType === "LEARNING_PATH_ITEM") {
+      const item = await prisma.learningPathItem.findUnique({ where: { id } });
+      if (!item) throw new AppValidationError("Lesson not found");
+      if (!item.priceInPaise) throw new AppValidationError("This lesson is not for sale on its own");
+      amountPaise = item.priceInPaise;
+      learningPathItemId = item.id;
     } else if (purchasableType === "BUNDLE") {
       const bundle = await prisma.bundle.findUnique({ where: { id } });
       if (!bundle || !bundle.isActive) throw new AppValidationError("Bundle not found");
       amountPaise = bundle.priceInPaise;
       bundleId = bundle.id;
-    } else if (purchasableType === "MOODLE_COURSE") {
-      const mapping = await prisma.moodleCourseMapping.findUnique({ where: { feedItemId: id } });
+    } else if (purchasableType === "TUTOR_LMS_COURSE") {
+      const mapping = await prisma.tutorLmsCourseMapping.findUnique({ where: { feedItemId: id } });
       if (!mapping || !mapping.isActive) throw new AppValidationError("This course is not for sale");
       amountPaise = mapping.priceInPaise;
       feedItemId = mapping.feedItemId;
+    } else if (purchasableType === "INSTALLMENT") {
+      const installment = await prisma.installment.findUnique({ where: { id }, include: { plan: true } });
+      if (!installment || installment.plan.userId !== userId) {
+        throw new AppValidationError("Installment not found");
+      }
+      if (installment.plan.status !== "CURRENT") throw new AppValidationError("This installment plan is no longer active");
+      if (installment.status === "PAID") throw new AppValidationError("This installment is already paid");
+      amountPaise = installment.amountPaise;
+      installmentId = installment.id;
     } else {
       const request = await prisma.tutorSessionRequest.findUnique({ where: { id } });
       if (!request || request.studentId !== userId) throw new AppValidationError("Session request not found");
@@ -51,9 +77,12 @@ export const purchaseService = {
         userId,
         purchasableType,
         learningPathId,
+        learningPathModuleId,
+        learningPathItemId,
         bundleId,
         feedItemId,
         tutorSessionRequestId,
+        installmentId,
         amountPaise,
         razorpayOrderId: order.id,
       },
@@ -79,6 +108,30 @@ export const purchaseService = {
     });
   },
 
+  /** Side effect once a Purchase is confirmed PAID: if it's a TUTOR_LMS_COURSE, enroll the student in WordPress. */
+  async _grantTutorLmsAccess(userId: string, purchasableType: PurchasableType, feedItemId: string | null) {
+    if (purchasableType !== "TUTOR_LMS_COURSE" || !feedItemId) return;
+    await tutorLmsService.grantAccess(userId, feedItemId);
+  },
+
+  /**
+   * Side effect once a Purchase is confirmed PAID: if it's settling an
+   * Installment, mark it paid and complete the plan once every installment
+   * in it is paid.
+   */
+  async _settleInstallment(purchasableType: PurchasableType, installmentId: string | null) {
+    if (purchasableType !== "INSTALLMENT" || !installmentId) return;
+    const installment = await prisma.installment.update({
+      where: { id: installmentId },
+      data: { status: "PAID", paidAt: new Date() },
+      include: { plan: { include: { installments: true } } },
+    });
+    const allPaid = installment.plan.installments.every((i) => i.status === "PAID");
+    if (allPaid) {
+      await prisma.installmentPlan.update({ where: { id: installment.plan.id }, data: { status: "COMPLETED" } });
+    }
+  },
+
   /** Called from the client immediately after Razorpay's checkout succeeds. */
   async verifyPayment(
     userId: string,
@@ -100,6 +153,8 @@ export const purchaseService = {
       data: { status: "PAID", razorpayPaymentId: input.razorpayPaymentId },
     });
     await purchaseService._confirmLinkedTutorSession(paid.tutorSessionRequestId);
+    await purchaseService._grantTutorLmsAccess(paid.userId, paid.purchasableType, paid.feedItemId);
+    await purchaseService._settleInstallment(paid.purchasableType, paid.installmentId);
     return paid;
   },
 
@@ -116,29 +171,13 @@ export const purchaseService = {
       data: { status: "PAID", razorpayPaymentId },
     });
     await purchaseService._confirmLinkedTutorSession(purchase.tutorSessionRequestId);
+    await purchaseService._grantTutorLmsAccess(purchase.userId, purchase.purchasableType, purchase.feedItemId);
+    await purchaseService._settleInstallment(purchase.purchasableType, purchase.installmentId);
   },
 
-  async hasPathAccess(userId: string, pathId: string): Promise<boolean> {
-    const path = await prisma.learningPath.findUnique({ where: { id: pathId }, select: { priceInPaise: true } });
-    if (!path) return false;
-    if (!path.priceInPaise) return true;
-
-    const direct = await prisma.purchase.findFirst({
-      where: { userId, status: "PAID", purchasableType: "LEARNING_PATH", learningPathId: pathId },
-      select: { id: true },
-    });
-    if (direct) return true;
-
-    const viaBundle = await prisma.purchase.findFirst({
-      where: {
-        userId,
-        status: "PAID",
-        purchasableType: "BUNDLE",
-        bundle: { paths: { some: { learningPathId: pathId } } },
-      },
-      select: { id: true },
-    });
-    return Boolean(viaBundle);
+  /** @deprecated Use contentAccessService.hasAccess({ type: "LEARNING_PATH", id }) directly — kept as a thin wrapper for existing call sites. */
+  hasPathAccess(userId: string, pathId: string): Promise<boolean> {
+    return contentAccessService.hasAccess(userId, { type: "LEARNING_PATH", id: pathId });
   },
 
   listMyPurchases(userId: string) {
@@ -146,7 +185,19 @@ export const purchaseService = {
       where: { userId, status: "PAID" },
       include: {
         learningPath: true,
-        bundle: { include: { paths: { include: { learningPath: true } } } },
+        learningPathModule: true,
+        learningPathItem: { include: { feedItem: true } },
+        bundle: {
+          include: {
+            items: {
+              include: {
+                learningPath: true,
+                learningPathModule: true,
+                learningPathItem: { include: { feedItem: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });

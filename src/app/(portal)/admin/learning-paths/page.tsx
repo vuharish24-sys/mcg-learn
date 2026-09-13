@@ -5,6 +5,7 @@ import { pathCoverImageUrl, pathPreviewImages } from "@/lib/learning-path-media"
 import { feedService } from "@/services/feed.service";
 import { learningPathService } from "@/services/learning-path.service";
 import { LearningPathForm } from "@/components/learning-path/learning-path-form";
+import { LearningPathModuleForm } from "@/components/learning-path/learning-path-module-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MediaCover } from "@/components/ui/media-cover";
@@ -84,37 +85,72 @@ export default async function AdminLearningPathsPage() {
                       )}
                     </div>
                   </CardHeader>
-                  <CardContent className="flex flex-wrap items-center justify-between gap-4">
-                    <p className="line-clamp-2 max-w-2xl text-sm text-slate-500">{path.description}</p>
-                    <LearningPathForm
-                      feedItems={feedOptions}
-                      endpoint={`/api/v1/learning-paths/${path.id}`}
-                      method="PATCH"
-                      initial={{
-                        title: path.title,
-                        slug: path.slug,
-                        description: path.description,
-                        thumbnailUrl: path.thumbnailUrl ?? "",
-                        estimatedDuration: path.estimatedDuration?.toString() ?? "",
-                        difficulty: path.difficulty,
-                        category: path.category,
-                        status: path.status,
-                        visibility: path.visibility,
-                        isFeatured: path.isFeatured,
-                        requiredQuizFeedItemId: path.requiredQuizFeedItemId ?? "",
-                        quizPassPercentage: String(path.quizPassPercentage),
-                        certificateTemplate: path.certificateTemplate ?? "",
-                        rewardType: path.rewardType,
-                        badgeIcon: path.badgeIcon ?? "",
-                        priceInPaise: path.priceInPaise,
-                        items: path.items.map((item) => ({
-                          feedItemId: item.feedItemId,
-                          sortOrder: item.sortOrder,
-                          isRequired: item.isRequired,
-                          passPercentage: item.passPercentage?.toString() ?? "",
-                        })),
-                      }}
-                    />
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <p className="line-clamp-2 max-w-2xl text-sm text-slate-500">{path.description}</p>
+                      <LearningPathForm
+                        feedItems={feedOptions}
+                        modules={path.modules.map((m) => ({ value: m.id, label: m.title }))}
+                        endpoint={`/api/v1/learning-paths/${path.id}`}
+                        method="PATCH"
+                        initial={{
+                          title: path.title,
+                          slug: path.slug,
+                          description: path.description,
+                          thumbnailUrl: path.thumbnailUrl ?? "",
+                          estimatedDuration: path.estimatedDuration?.toString() ?? "",
+                          difficulty: path.difficulty,
+                          category: path.category,
+                          status: path.status,
+                          visibility: path.visibility,
+                          isFeatured: path.isFeatured,
+                          requiredQuizFeedItemId: path.requiredQuizFeedItemId ?? "",
+                          quizPassPercentage: String(path.quizPassPercentage),
+                          certificateTemplate: path.certificateTemplate ?? "",
+                          rewardType: path.rewardType,
+                          badgeIcon: path.badgeIcon ?? "",
+                          priceInPaise: path.priceInPaise,
+                          items: path.items.map((item) => ({
+                            feedItemId: item.feedItemId,
+                            sortOrder: item.sortOrder,
+                            isRequired: item.isRequired,
+                            passPercentage: item.passPercentage?.toString() ?? "",
+                            moduleId: item.moduleId ?? "",
+                            priceRupees: item.priceInPaise ? String(item.priceInPaise / 100) : "",
+                          })),
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2 rounded-lg border p-3 dark:border-slate-800">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">Modules ({path.modules.length})</p>
+                        <LearningPathModuleForm learningPathId={path.id} />
+                      </div>
+                      {path.modules.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {path.modules.map((module) => (
+                            <div key={module.id} className="flex items-center gap-1.5 rounded-full border border-slate-200 py-1 pl-3 pr-1 text-xs dark:border-slate-700">
+                              <span>{module.title}</span>
+                              {module.priceInPaise ? (
+                                <Badge className="border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                                  ₹{(module.priceInPaise / 100).toLocaleString("en-IN")}
+                                </Badge>
+                              ) : null}
+                              <LearningPathModuleForm
+                                learningPathId={path.id}
+                                moduleId={module.id}
+                                initial={{
+                                  title: module.title,
+                                  description: module.description ?? "",
+                                  sortOrder: module.sortOrder,
+                                  priceInPaise: module.priceInPaise,
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </div>
               </div>

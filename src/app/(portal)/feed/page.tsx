@@ -25,7 +25,7 @@ const selectClassName =
 const CATEGORY_SHORTCUTS = [
   { label: "Learning Paths", href: "/learning-paths", icon: Route },
   { label: "Programs", href: "/feed?type=COURSE", icon: GraduationCap },
-  { label: "LMS Courses", href: "/feed?type=MOODLE_COURSE", icon: Laptop },
+  { label: "LMS Courses", href: "/feed?type=TUTOR_LMS_COURSE", icon: Laptop },
   { label: "Job Board", href: "/feed?type=JOB_POSTING", icon: Briefcase },
   { label: "Quizzes", href: "/feed?type=QUIZ", icon: ListChecks },
   { label: "Webinars", href: "/feed?type=WEBINAR", icon: Video },

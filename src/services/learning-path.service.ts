@@ -13,6 +13,9 @@ const pathInclude = {
     include: { feedItem: { include: { category: true } } },
     orderBy: { sortOrder: "asc" as const },
   },
+  modules: {
+    orderBy: { sortOrder: "asc" as const },
+  },
   requiredQuiz: true,
 } satisfies Prisma.LearningPathInclude;
 
@@ -21,6 +24,8 @@ type PathItemInput = {
   sortOrder: number;
   isRequired?: boolean;
   passPercentage?: number | null;
+  moduleId?: string | null;
+  priceInPaise?: number | null;
 };
 
 async function assertRequiredQuizInPathItems(
@@ -85,6 +90,8 @@ export const learningPathService = {
                 sortOrder: item.sortOrder,
                 isRequired: item.isRequired ?? true,
                 passPercentage: item.passPercentage ?? null,
+                moduleId: item.moduleId ?? null,
+                priceInPaise: item.priceInPaise ?? null,
               })),
             }
           : undefined,
@@ -130,6 +137,8 @@ export const learningPathService = {
               sortOrder: item.sortOrder,
               isRequired: item.isRequired ?? true,
               passPercentage: item.passPercentage ?? null,
+              moduleId: item.moduleId ?? null,
+              priceInPaise: item.priceInPaise ?? null,
             })),
           });
         }
