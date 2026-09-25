@@ -5,10 +5,12 @@
 [build.environment]
   NODE_VERSION = "22"
   NPM_FLAGS = "--include=dev"
-  # NEXT_PUBLIC_* vars are meant to end up in the client bundle — that's the
-  # whole point of the prefix. Netlify's secret scanner otherwise flags that
-  # as a leak and fails the build.
-  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_RAZORPAY_KEY_ID"
+  # RAZORPAY_KEY_ID and NEXT_PUBLIC_RAZORPAY_KEY_ID share the same value on
+  # purpose — a Razorpay Key ID (unlike the Key Secret) is meant to be public
+  # and ends up in the client bundle. Netlify's secret scanner matches by
+  # value, not by which env var name is actually sensitive, and has flagged
+  # this value under either name depending on the run — omit both.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_RAZORPAY_KEY_ID,RAZORPAY_KEY_ID"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
