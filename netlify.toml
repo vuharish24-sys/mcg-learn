@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "22"
   NPM_FLAGS = "--include=dev"
+  # NEXT_PUBLIC_* vars are meant to end up in the client bundle — that's the
+  # whole point of the prefix. Netlify's secret scanner otherwise flags that
+  # as a leak and fails the build.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_RAZORPAY_KEY_ID"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
