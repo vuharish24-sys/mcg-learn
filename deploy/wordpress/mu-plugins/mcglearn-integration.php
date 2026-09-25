@@ -372,3 +372,40 @@ add_action(
 		<?php
 	}
 );
+
+/**
+ * Sends a student all the way back to MCG-Learn — logged out of both sides,
+ * not just WordPress — when they log out of a session that arrived via the
+ * launch flow (same `mcglearn_return_url` cookie the back-link banner
+ * reads). Organic WordPress users and admins doing unrelated site work
+ * never carry that cookie, so their own logout is completely unaffected —
+ * this only ever fires for sessions MCG-Learn itself launched.
+ *
+ * Requires MCGLEARN_APP_URL defined in wp-config.php (e.g.
+ * "https://mcg-learn.netlify.app") — falls back to WordPress's own default
+ * redirect if it's missing, so a config gap degrades gracefully rather than
+ * breaking logout.
+ */
+add_filter(
+	'logout_redirect',
+	function ( $redirect_to ) {
+		if ( empty( $_COOKIE['mcglearn_return_url'] ) || ! defined( 'MCGLEARN_APP_URL' ) || ! MCGLEARN_APP_URL ) {
+			return $redirect_to;
+		}
+		return rtrim( MCGLEARN_APP_URL, '/' ) . '/api/v1/auth/logout';
+	}
+);
+
+/**
+ * Clears the return-link cookie on logout — the WordPress session it was
+ * scoped to is over either way, so there's nothing left for the back-link
+ * banner to point back into.
+ */
+add_action(
+	'wp_logout',
+	function () {
+		if ( ! empty( $_COOKIE['mcglearn_return_url'] ) ) {
+			setcookie( 'mcglearn_return_url', '', time() - HOUR_IN_SECONDS, COOKIEPATH ? COOKIEPATH : '/', COOKIE_DOMAIN, is_ssl(), true );
+		}
+	}
+);
