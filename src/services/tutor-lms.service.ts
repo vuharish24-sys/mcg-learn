@@ -1,4 +1,5 @@
 import { AppValidationError } from "@/lib/api";
+import { appUrl } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateWpUser, enrollWpUser, generateAutoLoginUrl } from "@/lib/tutor-lms";
 
@@ -86,6 +87,7 @@ export const tutorLmsService = {
     if (!refreshed?.wordpressUserId) {
       throw new AppValidationError("Unable to set up your WordPress access — contact the site admin.");
     }
-    return generateAutoLoginUrl(refreshed.wordpressUserId, mapping?.tutorCourseId);
+    const returnUrl = `${appUrl()}/feed/${feedItemId}/tutor-lms-course`;
+    return generateAutoLoginUrl(refreshed.wordpressUserId, mapping?.tutorCourseId, returnUrl);
   },
 };

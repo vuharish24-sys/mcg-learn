@@ -222,13 +222,19 @@ function mcglearn_handle_unenroll( WP_REST_Request $request ) {
 }
 
 /**
- * POST /wp-json/mcglearn/v1/auto-login-token — { user_id, course_id? }
+ * POST /wp-json/mcglearn/v1/auto-login-token — { user_id, course_id?, return_url? }
  *
  * course_id is optional and not in the original spec, but accepted here
  * so the launch redirect can go straight to a specific course rather than
  * a generic dashboard — validated server-side against a real post ID
  * rather than accepting an arbitrary redirect URL from the caller, so
  * this can't become an open-redirect.
+ *
+ * return_url is likewise optional, also not in the original spec — MCG-Learn
+ * passes the page the student launched from so mcglearn_render_return_banner()
+ * can show them a way back. It's only ever used as a link href (never
+ * auto-redirected to), so a bad value just makes for a broken link, not a
+ * security issue — sanitized with esc_url_raw() regardless.
  *
  * @param WP_REST_Request $request The incoming request.
  * @return WP_REST_Response|WP_Error
@@ -252,12 +258,16 @@ function mcglearn_handle_create_auto_login_token( WP_REST_Request $request ) {
 		);
 	}
 
+	$return_url_param = $request->get_param( 'return_url' );
+	$return_url       = $return_url_param ? esc_url_raw( $return_url_param ) : '';
+
 	$token = bin2hex( random_bytes( 32 ) );
 	set_transient(
 		'mcglearn_autologin_' . $token,
 		array(
-			'user_id'   => $user_id,
-			'course_id' => $course_id ? $course_id : 0,
+			'user_id'    => $user_id,
+			'course_id'  => $course_id ? $course_id : 0,
+			'return_url' => $return_url,
 		),
 		MCGLEARN_TOKEN_TTL
 	);
@@ -271,6 +281,15 @@ function mcglearn_handle_create_auto_login_token( WP_REST_Request $request ) {
 		200
 	);
 }
+
+/**
+ * How long the "Back to MCG Learn" link stays put after a launch, in
+ * seconds — long enough to cover one real study session. Stored as a
+ * cookie rather than user meta on purpose: it must not persist on the
+ * account itself, or a shared/admin account that ever launches once would
+ * show a student-facing banner in every future WordPress session too.
+ */
+define( 'MCGLEARN_RETURN_LINK_TTL', DAY_IN_SECONDS );
 
 /**
  * Consumes an auto-login token from a real top-level browser navigation
@@ -306,8 +325,50 @@ add_action(
 		wp_set_auth_cookie( $user_id, false );
 		do_action( 'wp_login', get_userdata( $user_id )->user_login, get_userdata( $user_id ) );
 
+		if ( ! empty( $data['return_url'] ) ) {
+			setcookie(
+				'mcglearn_return_url',
+				$data['return_url'],
+				time() + MCGLEARN_RETURN_LINK_TTL,
+				COOKIEPATH ? COOKIEPATH : '/',
+				COOKIE_DOMAIN,
+				is_ssl(),
+				true
+			);
+		}
+
 		$redirect = ! empty( $data['course_id'] ) ? get_permalink( (int) $data['course_id'] ) : home_url( '/dashboard/' );
 		wp_safe_redirect( $redirect ? $redirect : home_url( '/' ) );
 		exit;
+	}
+);
+
+/**
+ * Shows a small fixed "Back to MCG Learn" bar on every front-end page for
+ * the rest of the browser session that arrived via an auto-login-token
+ * launch — the only way a student had to get back before this existed was
+ * their browser's own Back button. Reads the cookie set above; renders
+ * nothing for anyone who didn't come from that flow (organic WordPress
+ * visitors, admins doing unrelated site work, students whose cookie has
+ * expired).
+ */
+add_action(
+	'wp_footer',
+	function () {
+		if ( is_admin() || empty( $_COOKIE['mcglearn_return_url'] ) ) {
+			return;
+		}
+
+		$return_url = esc_url( wp_unslash( $_COOKIE['mcglearn_return_url'] ) );
+		if ( ! $return_url ) {
+			return;
+		}
+		?>
+		<a
+			href="<?php echo esc_url( $return_url ); ?>"
+			style="position:fixed;top:0;left:0;right:0;z-index:99999;display:block;padding:10px 16px;background:#0f766e;color:#fff;text-align:center;font:14px/1.4 -apple-system,sans-serif;text-decoration:none;"
+		>&larr; Back to MCG Learn</a>
+		<style>body { margin-top: 42px !important; }</style>
+		<?php
 	}
 );

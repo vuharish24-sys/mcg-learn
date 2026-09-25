@@ -93,11 +93,22 @@ export function unenrollWpUser(wpUserId: number, tutorCourseId: number): Promise
   return callPlugin("unenroll", { user_id: wpUserId, course_id: tutorCourseId });
 }
 
-/** Returns a one-time login URL that drops the browser straight into WordPress, already authenticated. */
-export async function generateAutoLoginUrl(wpUserId: number, tutorCourseId?: number): Promise<string> {
+/**
+ * Returns a one-time login URL that drops the browser straight into
+ * WordPress, already authenticated. `returnUrl`, if given, is handed to the
+ * plugin so it can show a "Back to MCG Learn" link on every page for the
+ * rest of that browser session — otherwise a student has no way back short
+ * of the browser's own Back button.
+ */
+export async function generateAutoLoginUrl(
+  wpUserId: number,
+  tutorCourseId?: number,
+  returnUrl?: string,
+): Promise<string> {
   const result = await callPlugin("auto-login-token", {
     user_id: wpUserId,
     ...(tutorCourseId ? { course_id: tutorCourseId } : {}),
+    ...(returnUrl ? { return_url: returnUrl } : {}),
   });
   if (typeof result.launch_url !== "string") throw new Error("WordPress plugin did not return a launch_url");
   return result.launch_url;
