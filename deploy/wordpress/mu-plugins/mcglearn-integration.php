@@ -344,13 +344,29 @@ add_action(
 );
 
 /**
- * Shows a small fixed "Back to MCG Learn" bar on every front-end page for
- * the rest of the browser session that arrived via an auto-login-token
- * launch — the only way a student had to get back before this existed was
- * their browser's own Back button. Reads the cookie set above; renders
- * nothing for anyone who didn't come from that flow (organic WordPress
- * visitors, admins doing unrelated site work, students whose cookie has
- * expired).
+ * Hides WordPress's own admin toolbar for a launched student session. Two
+ * reasons: a subscriber has no real use for wp-admin shortcuts anyway, and
+ * — the one that actually forced this — the toolbar is fixed to the top of
+ * the page just like the back-link bar below, and the two fought over the
+ * same strip, with the back-link bar's higher z-index winning and silently
+ * eating clicks meant for the toolbar's own Log Out link underneath it.
+ */
+add_filter(
+	'show_admin_bar',
+	function ( $show ) {
+		return empty( $_COOKIE['mcglearn_return_url'] ) ? $show : false;
+	}
+);
+
+/**
+ * Shows a small fixed bar on every front-end page for the rest of the
+ * browser session that arrived via an auto-login-token launch — the only
+ * way a student had to get back before this existed was their browser's
+ * own Back button, and with the admin toolbar now hidden for these
+ * sessions (see above), they need an explicit logout link too. Reads the
+ * cookie set above; renders nothing for anyone who didn't come from that
+ * flow (organic WordPress visitors, admins doing unrelated site work,
+ * students whose cookie has expired).
  */
 add_action(
 	'wp_footer',
@@ -364,10 +380,11 @@ add_action(
 			return;
 		}
 		?>
-		<a
-			href="<?php echo esc_url( $return_url ); ?>"
-			style="position:fixed;top:0;left:0;right:0;z-index:99999;display:block;padding:10px 16px;background:#0f766e;color:#fff;text-align:center;font:14px/1.4 -apple-system,sans-serif;text-decoration:none;"
-		>&larr; Back to MCG Learn</a>
+		<div style="position:fixed;top:0;left:0;right:0;z-index:99999;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;background:#0f766e;font:14px/1.4 -apple-system,sans-serif;">
+			<a href="<?php echo esc_url( $return_url ); ?>" style="color:#fff;text-decoration:none;">&larr; Back to MCG Learn</a>
+			<?php /* No redirect arg needed — the logout_redirect filter above always sends this cookie's owner to MCGLEARN_APP_URL regardless. */ ?>
+			<a href="<?php echo esc_url( wp_logout_url() ); ?>" style="color:#ccfbf1;text-decoration:none;">Log out</a>
+		</div>
 		<style>body { margin-top: 42px !important; }</style>
 		<?php
 	}
