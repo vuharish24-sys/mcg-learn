@@ -12,7 +12,7 @@ export const supabaseEnv = () => ({
 });
 
 export const appUrl = () =>
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 /** Shared secret for server-to-server calls (e.g. the scheduled expiry job). Unset disables this auth path. */
 export const cronSecret = () => process.env.CRON_SECRET || null;
