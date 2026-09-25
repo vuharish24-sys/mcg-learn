@@ -391,6 +391,26 @@ add_action(
 );
 
 /**
+ * wp_safe_redirect() (what wp-login.php's logout handler uses to apply
+ * logout_redirect's return value) only allows redirecting to the current
+ * site's own host plus whatever's added here — anything else is silently
+ * swapped for wp_safe_redirect()'s own fallback (admin_url() by default),
+ * which is exactly why the filter below alone wasn't enough: its return
+ * value was correct, core was just rejecting it as an off-site redirect.
+ * Derives the host from MCGLEARN_APP_URL itself rather than repeating the
+ * literal domain a second time, so it can't drift out of sync.
+ */
+add_filter(
+	'allowed_redirect_hosts',
+	function ( $hosts ) {
+		if ( defined( 'MCGLEARN_APP_URL' ) && MCGLEARN_APP_URL ) {
+			$hosts[] = wp_parse_url( MCGLEARN_APP_URL, PHP_URL_HOST );
+		}
+		return $hosts;
+	}
+);
+
+/**
  * Sends a student all the way back to MCG-Learn — logged out of both sides,
  * not just WordPress — when they log out of a session that arrived via the
  * launch flow (same `mcglearn_return_url` cookie the back-link banner
