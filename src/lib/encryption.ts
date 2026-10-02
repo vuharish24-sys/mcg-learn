@@ -18,6 +18,16 @@ function getKey(): Buffer {
   return key;
 }
 
+/** Null when SETTINGS_ENCRYPTION_KEY is usable, otherwise why it isn't — for admin UI warnings. */
+export function encryptionKeyProblem(): string | null {
+  try {
+    getKey();
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "SETTINGS_ENCRYPTION_KEY is not usable.";
+  }
+}
+
 /** Encrypts a secret for storage. Output is self-contained (iv + auth tag + ciphertext, base64). */
 export function encryptSecret(plaintext: string): string {
   const iv = randomBytes(IV_LENGTH);

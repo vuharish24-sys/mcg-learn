@@ -7,7 +7,7 @@ import {
   resolveConfig,
   type ConfigGroup,
 } from "@/lib/app-config";
-import { encryptSecret, maskSecret } from "@/lib/encryption";
+import { encryptSecret, encryptionKeyProblem, maskSecret } from "@/lib/encryption";
 import { probePracticeLab } from "@/lib/practice-lab";
 import { probeRazorpay } from "@/lib/razorpay";
 import { probeWordPress } from "@/lib/tutor-lms";
@@ -29,7 +29,11 @@ export type IntegrationConfigView = {
 };
 
 export const integrationConfigService = {
-  async listForAdmin(): Promise<{ groups: typeof CONFIG_GROUPS; configs: IntegrationConfigView[] }> {
+  async listForAdmin(): Promise<{
+    groups: typeof CONFIG_GROUPS;
+    configs: IntegrationConfigView[];
+    encryptionProblem: string | null;
+  }> {
     clearConfigCache();
     const rows = await prisma.integrationConfig.findMany({
       select: { key: true, updatedAt: true, updatedByEmail: true },
@@ -54,13 +58,15 @@ export const integrationConfigService = {
         };
       }),
     );
-    return { groups: CONFIG_GROUPS, configs };
+    return { groups: CONFIG_GROUPS, configs, encryptionProblem: encryptionKeyProblem() };
   },
 
   async set(key: string, value: string, updatedByEmail: string) {
     if (!findConfigDefinition(key)) throw new AppValidationError("Unknown configuration key");
     const trimmed = value.trim();
     if (!trimmed) throw new AppValidationError("Value can't be empty — use Clear to remove it");
+    const problem = encryptionKeyProblem();
+    if (problem) throw new AppValidationError(`Can't save: ${problem} Set it on the server (Netlify) and redeploy.`);
     const encryptedValue = encryptSecret(trimmed);
     await prisma.integrationConfig.upsert({
       where: { key },

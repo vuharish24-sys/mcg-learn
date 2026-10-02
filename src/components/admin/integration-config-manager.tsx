@@ -25,6 +25,7 @@ type ConfigView = {
 type Data = {
   groups: Record<ConfigGroup, { label: string; description: string }>;
   configs: ConfigView[];
+  encryptionProblem: string | null;
 };
 
 const TESTABLE: ConfigGroup[] = ["practiceLab", "razorpay", "wordpress"];
@@ -114,6 +115,13 @@ export function IntegrationConfigManager({ initialData }: { initialData: Data })
 
   return (
     <div className="space-y-4">
+      {data.encryptionProblem && (
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          Values can&apos;t be saved yet: {data.encryptionProblem} It must be set as an environment variable on
+          the server (Netlify), and must be the same value everywhere this database is used, or values saved
+          from one place can&apos;t be read by another.
+        </p>
+      )}
       {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
       {groups.map((group) => {

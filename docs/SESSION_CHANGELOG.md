@@ -656,3 +656,9 @@ Asked for by the user: store integration configuration in the database rather th
 - Not exercised: the admin page UI itself rendered for an admin (that needs an admin login, which wasn't done), and Razorpay/WordPress/email/WhatsApp values coming from the DB at runtime (same code path as Practice Lab).
 
 **Moving production onto it**: Netlify's existing env vars keep working and keep winning. To manage a key in the app, save it in Admin > Integrations, then delete that variable from Netlify. Deleting a variable takes effect on the next deploy, so the switch can ride the same single deploy as everything else.
+
+**Found on first live use (same day)**: every save on `/admin/integrations` failed with a generic "An unexpected error occurred". The cause: `SETTINGS_ENCRYPTION_KEY` had never been set on Netlify, which also meant production had never been able to read the two AI provider keys saved from local (both showed as "unreadable"). Fixed:
+- A fresh random key was generated at the user's request. The two existing encrypted values (`ai_provider_configs`; there were no content-source or integration rows) were re-encrypted with it in one transaction, all decrypting with the new key was verified, and the local `.env` was updated. The key was passed to the user via the clipboard, never shown in chat, and the user added it to Netlify. Local and production must share this one key, since they share one database.
+- The Integrations page now shows a warning when the encryption key is missing or invalid, and a failed save says why instead of returning a generic 500 (`encryptionKeyProblem()` in `src/lib/encryption.ts`).
+- Verified on the live site before this fix: Razorpay "Test connection" reported connected (test-mode keys, no webhook secret yet), and WordPress reported "Connected as mcglearn-api".
+- Leftover unused Moodle/LTI env vars (`LTI_PLATFORM_*`, including a private key, and `MOODLE_LTI_*`) are still on Netlify; they're safe to delete.
