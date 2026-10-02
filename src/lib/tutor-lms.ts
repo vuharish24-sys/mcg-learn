@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { requireConfig } from "@/lib/app-config";
 
 /**
  * Client for the self-hosted WordPress + Tutor LMS instance. Two separate
@@ -12,39 +13,20 @@ import { randomUUID } from "node:crypto";
  *     system. See docs/WORDPRESS_MIGRATION.md for why both of those don't
  *     work for this.
  */
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
-}
-
-export const wordpressConfig = {
-  get baseUrl() {
-    return requireEnv("WORDPRESS_BASE_URL").replace(/\/$/, "");
-  },
-  get appUsername() {
-    return requireEnv("WORDPRESS_APP_USERNAME");
-  },
-  get appPassword() {
-    return requireEnv("WORDPRESS_APP_PASSWORD");
-  },
-  /** Shared secret for the custom mcglearn/v1 plugin routes — see file comment. */
-  get pluginSecret() {
-    return requireEnv("MCGLEARN_WP_PLUGIN_SECRET");
-  },
-};
-
-function wpBasicAuthHeader(): string {
-  const token = Buffer.from(`${wordpressConfig.appUsername}:${wordpressConfig.appPassword}`).toString("base64");
-  return `Basic ${token}`;
+async function wordpressConfig() {
+  const [baseUrl, appUsername, appPassword] = await Promise.all([
+    requireConfig("WORDPRESS_BASE_URL"),
+    requireConfig("WORDPRESS_APP_USERNAME"),
+    requireConfig("WORDPRESS_APP_PASSWORD"),
+  ]);
+  return { baseUrl: baseUrl.replace(/\/$/, ""), basicAuth: `Basic ${Buffer.from(`${appUsername}:${appPassword}`).toString("base64")}` };
 }
 
 type WpUser = { id: number; email?: string };
 
 /** Finds an existing WordPress user by email via WP's core Users API, or creates one. Returns the WP user id. */
 export async function findOrCreateWpUser(email: string, fullName: string): Promise<number> {
-  const base = wordpressConfig.baseUrl;
-  const auth = wpBasicAuthHeader();
+  const { baseUrl: base, basicAuth: auth } = await wordpressConfig();
 
   const searchRes = await fetch(`${base}/wp-json/wp/v2/users?search=${encodeURIComponent(email)}&context=edit`, {
     headers: { Authorization: auth },
@@ -73,11 +55,12 @@ export async function findOrCreateWpUser(email: string, fullName: string): Promi
 }
 
 async function callPlugin(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await fetch(`${wordpressConfig.baseUrl}/wp-json/mcglearn/v1/${path}`, {
+  const [{ baseUrl }, pluginSecret] = await Promise.all([wordpressConfig(), requireConfig("MCGLEARN_WP_PLUGIN_SECRET")]);
+  const res = await fetch(`${baseUrl}/wp-json/mcglearn/v1/${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-MCGLearn-Key": wordpressConfig.pluginSecret,
+      "X-MCGLearn-Key": pluginSecret,
     },
     body: JSON.stringify(body),
   });
@@ -112,4 +95,24 @@ export async function generateAutoLoginUrl(
   });
   if (typeof result.launch_url !== "string") throw new Error("WordPress plugin did not return a launch_url");
   return result.launch_url;
+}
+
+/**
+ * Admin > Integrations "Test connection": reads the Application Password
+ * account's own profile. Doesn't exercise the plugin's shared secret — the
+ * plugin has no read-only route to check it against.
+ */
+export async function probeWordPress(): Promise<{ ok: boolean; message: string }> {
+  try {
+    const { baseUrl, basicAuth } = await wordpressConfig();
+    const res = await fetch(`${baseUrl}/wp-json/wp/v2/users/me?context=edit`, { headers: { Authorization: basicAuth } });
+    if (res.ok) {
+      const me = (await res.json()) as { slug?: string };
+      return { ok: true, message: `Connected as "${me.slug ?? "unknown"}". (The plugin shared secret isn't checked by this test.)` };
+    }
+    if (res.status === 401) return { ok: false, message: "Rejected (401): wrong Application Password username or password." };
+    return { ok: false, message: `WordPress returned ${res.status}.` };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Unable to reach WordPress." };
+  }
 }

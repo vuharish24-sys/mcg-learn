@@ -10,6 +10,7 @@ import { enumLabel } from "@/lib/utils";
 export function feedTypeLabel(type: FeedType): string {
   if (type === "COURSE") return "Program";
   if (type === "TUTOR_LMS_COURSE") return "LMS Course";
+  if (type === "PRACTICE_LAB_EXAM") return "Practice Lab";
   return enumLabel(type);
 }
 
@@ -22,6 +23,7 @@ export type FeedActionKind =
   | "job"
   | "course"
   | "tutorLmsCourse"
+  | "practiceLabExam"
   | "external"
   | "internal";
 
@@ -44,6 +46,8 @@ export function getFeedActionKind(type: FeedType): FeedActionKind {
       return "course";
     case "TUTOR_LMS_COURSE":
       return "tutorLmsCourse";
+    case "PRACTICE_LAB_EXAM":
+      return "practiceLabExam";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -74,6 +78,8 @@ export function getFeedActionLabel(type: FeedType): string {
       return "View program";
     case "TUTOR_LMS_COURSE":
       return "View course";
+    case "PRACTICE_LAB_EXAM":
+      return "View exam";
     case "ADVERTISEMENT":
     case "SPONSORED":
     case "INTERNAL_PROMOTION":
@@ -96,6 +102,7 @@ export function getFeedActionHref(id: string, type: FeedType): string {
   if (kind === "job") return `/jobs/${id}`;
   if (kind === "course") return `/feed/${id}/course`;
   if (kind === "tutorLmsCourse") return `/feed/${id}/tutor-lms-course`;
+  if (kind === "practiceLabExam") return `/feed/${id}/practice-lab-exam`;
   return `/api/v1/feed/${id}/open`;
 }
 
@@ -111,6 +118,7 @@ export function getPathFeedItemHref(id: string, type: FeedType, learningPathId: 
   if (kind === "job") return `/jobs/${id}`;
   if (kind === "course") return `/feed/${id}/course?${qs}`;
   if (kind === "tutorLmsCourse") return `/feed/${id}/tutor-lms-course?${qs}`;
+  if (kind === "practiceLabExam") return `/feed/${id}/practice-lab-exam?${qs}`;
   return `/feed/${id}/engage?${qs}`;
 }
 

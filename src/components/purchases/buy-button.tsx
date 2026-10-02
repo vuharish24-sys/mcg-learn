@@ -35,6 +35,7 @@ export function BuyButton({
     | "LEARNING_PATH_ITEM"
     | "BUNDLE"
     | "TUTOR_LMS_COURSE"
+    | "PRACTICE_LAB_EXAM"
     | "TUTOR_SESSION"
     | "INSTALLMENT";
   id: string;

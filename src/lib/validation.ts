@@ -137,6 +137,7 @@ export const purchaseCheckoutSchema = z.object({
     "LEARNING_PATH_ITEM",
     "BUNDLE",
     "TUTOR_LMS_COURSE",
+    "PRACTICE_LAB_EXAM",
     "TUTOR_SESSION",
     "INSTALLMENT",
   ]),
@@ -156,6 +157,14 @@ export const tutorSessionPriceSchema = z.object({
 
 export const tutorLmsCourseMappingSchema = z.object({
   tutorCourseId: z.coerce.number().int().min(1),
+  priceInPaise: z.coerce.number().int().min(0),
+  isActive: z.coerce.boolean().optional(),
+});
+
+export const practiceLabExamMappingSchema = z.object({
+  grantKind: z.enum(["exam", "program_practice"]),
+  examId: z.string().trim().min(1).optional().nullable(),
+  programCode: z.string().trim().min(1).optional().nullable(),
   priceInPaise: z.coerce.number().int().min(0),
   isActive: z.coerce.boolean().optional(),
 });

@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const signature = request.headers.get("x-razorpay-signature");
   const rawBody = await request.text();
 
-  if (!signature || !verifyWebhookSignature(rawBody, signature)) {
+  if (!signature || !(await verifyWebhookSignature(rawBody, signature))) {
     return apiError("Invalid signature", 401);
   }
 

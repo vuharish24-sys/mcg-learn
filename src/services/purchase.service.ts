@@ -1,8 +1,9 @@
 import type { PurchasableType } from "@prisma/client";
 import { AppValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { getRazorpayClient, verifyCheckoutSignature } from "@/lib/razorpay";
+import { getRazorpayClient, getRazorpayPublicKeyId, verifyCheckoutSignature } from "@/lib/razorpay";
 import { contentAccessService } from "@/services/content-access.service";
+import { practiceLabService } from "@/services/practice-lab.service";
 import { tutorLmsService } from "@/services/tutor-lms.service";
 
 export const purchaseService = {
@@ -44,6 +45,11 @@ export const purchaseService = {
       if (!mapping || !mapping.isActive) throw new AppValidationError("This course is not for sale");
       amountPaise = mapping.priceInPaise;
       feedItemId = mapping.feedItemId;
+    } else if (purchasableType === "PRACTICE_LAB_EXAM") {
+      const mapping = await prisma.practiceLabExamMapping.findUnique({ where: { feedItemId: id } });
+      if (!mapping || !mapping.isActive) throw new AppValidationError("This is not for sale");
+      amountPaise = mapping.priceInPaise;
+      feedItemId = mapping.feedItemId;
     } else if (purchasableType === "INSTALLMENT") {
       const installment = await prisma.installment.findUnique({ where: { id }, include: { plan: true } });
       if (!installment || installment.plan.userId !== userId) {
@@ -63,7 +69,7 @@ export const purchaseService = {
       tutorSessionRequestId = request.id;
     }
 
-    const razorpay = getRazorpayClient();
+    const razorpay = await getRazorpayClient();
     if (!razorpay) throw new AppValidationError("Payments are not configured yet — contact the site admin.");
 
     const order = await razorpay.orders.create({
@@ -93,7 +99,7 @@ export const purchaseService = {
       orderId: order.id,
       amount: amountPaise,
       currency: "INR",
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? null,
+      keyId: await getRazorpayPublicKeyId(),
     };
   },
 
@@ -112,6 +118,17 @@ export const purchaseService = {
   async _grantTutorLmsAccess(userId: string, purchasableType: PurchasableType, feedItemId: string | null) {
     if (purchasableType !== "TUTOR_LMS_COURSE" || !feedItemId) return;
     await tutorLmsService.grantAccess(userId, feedItemId);
+  },
+
+  /** Side effect once a Purchase is confirmed PAID: if it's a PRACTICE_LAB_EXAM, grant the entitlement on the Practice Lab. */
+  async _grantPracticeLabAccess(purchase: {
+    id: string;
+    userId: string;
+    purchasableType: PurchasableType;
+    feedItemId: string | null;
+  }) {
+    if (purchase.purchasableType !== "PRACTICE_LAB_EXAM" || !purchase.feedItemId) return;
+    await practiceLabService.grantAccess(purchase.userId, purchase.feedItemId, purchase.id);
   },
 
   /**
@@ -142,18 +159,24 @@ export const purchaseService = {
     if (purchase.userId !== userId) throw new AppValidationError("Not authorized");
     if (purchase.status === "PAID") return purchase; // already confirmed, e.g. by the webhook
 
-    const valid = verifyCheckoutSignature(input.razorpayOrderId, input.razorpayPaymentId, input.razorpaySignature);
+    const valid = await verifyCheckoutSignature(input.razorpayOrderId, input.razorpayPaymentId, input.razorpaySignature);
     if (!valid) {
       await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "FAILED" } });
       throw new AppValidationError("Payment verification failed");
     }
 
-    const paid = await prisma.purchase.update({
-      where: { id: purchase.id },
+    // Conditional update so that if the webhook confirms this same purchase
+    // concurrently, only one of the two runs the side effects below (a
+    // Practice Lab grant isn't idempotent — running it twice double-grants).
+    const { count } = await prisma.purchase.updateMany({
+      where: { id: purchase.id, status: { not: "PAID" } },
       data: { status: "PAID", razorpayPaymentId: input.razorpayPaymentId },
     });
+    const paid = await prisma.purchase.findUniqueOrThrow({ where: { id: purchase.id } });
+    if (count === 0) return paid; // the webhook got there first
     await purchaseService._confirmLinkedTutorSession(paid.tutorSessionRequestId);
     await purchaseService._grantTutorLmsAccess(paid.userId, paid.purchasableType, paid.feedItemId);
+    await purchaseService._grantPracticeLabAccess(paid);
     await purchaseService._settleInstallment(paid.purchasableType, paid.installmentId);
     return paid;
   },
@@ -166,12 +189,14 @@ export const purchaseService = {
   async markPaidFromWebhook(razorpayOrderId: string, razorpayPaymentId: string) {
     const purchase = await prisma.purchase.findUnique({ where: { razorpayOrderId } });
     if (!purchase || purchase.status === "PAID") return;
-    await prisma.purchase.update({
-      where: { id: purchase.id },
+    const { count } = await prisma.purchase.updateMany({
+      where: { id: purchase.id, status: { not: "PAID" } },
       data: { status: "PAID", razorpayPaymentId },
     });
+    if (count === 0) return; // the client-side verify call got there first
     await purchaseService._confirmLinkedTutorSession(purchase.tutorSessionRequestId);
     await purchaseService._grantTutorLmsAccess(purchase.userId, purchase.purchasableType, purchase.feedItemId);
+    await purchaseService._grantPracticeLabAccess(purchase);
     await purchaseService._settleInstallment(purchase.purchasableType, purchase.installmentId);
   },
 

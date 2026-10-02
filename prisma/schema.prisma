@@ -26,6 +26,10 @@ enum FeedType {
    * A self-paced course actually delivered on the self-hosted WordPress + Tutor LMS instance. Distinct from COURSE (an off-platform, manually-enrolled program).
    */
   TUTOR_LMS_COURSE
+  /**
+   * A mock exam, sectional exam, or program-wide practice access (drills, case lab) delivered on the self-hosted Practice Lab platform. Distinct from QUIZ (an in-platform quiz) and TUTOR_LMS_COURSE (a WordPress/Tutor LMS course).
+   */
+  PRACTICE_LAB_EXAM
 }
 
 /**
@@ -368,6 +372,10 @@ model FeedItem {
    * TUTOR_LMS_COURSE only: the WordPress/Tutor LMS course this FeedItem grants access to.
    */
   tutorLmsCourseMapping     TutorLmsCourseMapping?
+  /**
+   * PRACTICE_LAB_EXAM only: the exam or program-practice entitlement this FeedItem grants on the Practice Lab.
+   */
+  practiceLabExamMapping    PracticeLabExamMapping?
   purchases                 Purchase[]
   createdAt                 DateTime                 @default(now()) @map("created_at")
   updatedAt                 DateTime                 @updatedAt @map("updated_at")
@@ -1373,6 +1381,10 @@ enum PurchasableType {
    */
   TUTOR_LMS_COURSE
   /**
+   * A PRACTICE_LAB_EXAM FeedItem — grants the mapped exam or program-practice entitlement on the Practice Lab.
+   */
+  PRACTICE_LAB_EXAM
+  /**
    * An on-demand tutor session, priced per-request once a trainer/admin quotes it.
    */
   TUTOR_SESSION
@@ -1414,7 +1426,7 @@ model Purchase {
   bundleId              String?              @map("bundle_id")
   bundle                Bundle?              @relation(fields: [bundleId], references: [id])
   /**
-   * TUTOR_LMS_COURSE only: the FeedItem (type TUTOR_LMS_COURSE) being unlocked.
+   * TUTOR_LMS_COURSE or PRACTICE_LAB_EXAM only: the FeedItem being unlocked.
    */
   feedItemId            String?              @map("feed_item_id")
   feedItem              FeedItem?            @relation(fields: [feedItemId], references: [id])
@@ -1533,6 +1545,37 @@ model TutorLmsCourseMapping {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("tutor_lms_course_mappings")
+}
+
+/**
+ * Links a PRACTICE_LAB_EXAM FeedItem to what it grants on the self-hosted
+ * Practice Lab platform (lab.medicalcodingglobal.com): either a single exam
+ * (grantKind "exam", examId is that exam's ULID — a mock or sectional exam
+ * sold on its own) or full practice access to a program (grantKind
+ * "program_practice", programCode e.g. "CPC" — drills, the case lab, and
+ * every exam in that program). No launch protocol fields needed: access is
+ * an HMAC-signed enrolment call plus a one-time hand-off link, mirroring
+ * TutorLmsCourseMapping.
+ */
+model PracticeLabExamMapping {
+  id           String   @id @default(cuid())
+  feedItemId   String   @unique @map("feed_item_id")
+  feedItem     FeedItem @relation(fields: [feedItemId], references: [id], onDelete: Cascade)
+  grantKind    String   @map("grant_kind")
+  /**
+   * Practice Lab's exam ULID. Required when grantKind is "exam".
+   */
+  examId       String?  @map("exam_id")
+  /**
+   * Practice Lab's program code (e.g. "CPC"). Required when grantKind is "program_practice".
+   */
+  programCode  String?  @map("program_code")
+  priceInPaise Int      @map("price_in_paise")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("practice_lab_exam_mappings")
 }
 
 enum SessionRequestStatus {
@@ -1893,4 +1936,21 @@ model CourseVariantBenefit {
   @@unique([variantId, benefitId])
   @@index([feedItemId])
   @@map("course_variant_benefits")
+}
+
+/**
+ * Admin-managed integration credentials and settings (Admin > Integrations),
+ * keyed by the same name as the env var they replace, e.g. PRACTICE_LAB_API_SECRET.
+ * Every value is encrypted at rest (AES-256-GCM, see src/lib/encryption.ts);
+ * SETTINGS_ENCRYPTION_KEY (env var only, never in this table) unlocks it.
+ * An env var with the same name, when set, takes precedence over the row here
+ * — see src/lib/app-config.ts.
+ */
+model IntegrationConfig {
+  key            String   @id
+  encryptedValue String   @map("encrypted_value")
+  updatedByEmail String?  @map("updated_by_email")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("integration_configs")
 }

@@ -1,6 +1,8 @@
+import { getConfig } from "@/lib/app-config";
+
 /**
  * Sends a WhatsApp template message via the Meta Graph API. Silently no-ops
- * (returns false) if the WhatsApp env vars aren't configured. Only template
+ * (returns false) if WhatsApp isn't configured (Admin > Integrations or env). Only template
  * messages are supported — Meta requires a pre-approved template for any
  * business-initiated message (i.e. one not sent within 24h of the user
  * messaging first), which is the case for every appointment notification.
@@ -10,9 +12,11 @@
  * in Meta Business Manager for WHATSAPP_TEMPLATE_NAME.
  */
 export async function sendWhatsAppTemplate(toE164: string, params: string[]): Promise<boolean> {
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const templateName = process.env.WHATSAPP_TEMPLATE_NAME;
+  const [accessToken, phoneNumberId, templateName] = await Promise.all([
+    getConfig("WHATSAPP_ACCESS_TOKEN"),
+    getConfig("WHATSAPP_PHONE_NUMBER_ID"),
+    getConfig("WHATSAPP_TEMPLATE_NAME"),
+  ]);
 
   if (!accessToken || !phoneNumberId || !templateName) {
     console.warn(`WhatsApp message skipped (not configured): template for ${toE164}`);

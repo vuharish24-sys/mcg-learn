@@ -17,6 +17,7 @@ const feedTypes = [
   "JOB_POSTING",
   "COURSE",
   "TUTOR_LMS_COURSE",
+  "PRACTICE_LAB_EXAM",
 ] as const;
 
 export { feedTypes };
