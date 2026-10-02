@@ -48,6 +48,7 @@ export const purchaseService = {
     } else if (purchasableType === "PRACTICE_LAB_EXAM") {
       const mapping = await prisma.practiceLabExamMapping.findUnique({ where: { feedItemId: id } });
       if (!mapping || !mapping.isActive) throw new AppValidationError("This is not for sale");
+      if (mapping.priceInPaise === 0) throw new AppValidationError("This is free — no purchase needed.");
       amountPaise = mapping.priceInPaise;
       feedItemId = mapping.feedItemId;
     } else if (purchasableType === "INSTALLMENT") {

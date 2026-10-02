@@ -53,6 +53,20 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
   },
   { key: "PRACTICE_LAB_API_KEY_ID", group: "practiceLab", label: "API key ID", secret: false },
   { key: "PRACTICE_LAB_API_SECRET", group: "practiceLab", label: "API secret", secret: true },
+  {
+    key: "PRACTICE_LAB_LOGOUT_URL",
+    group: "practiceLab",
+    label: "Logout URL",
+    secret: false,
+    help: "e.g. https://lab.medicalcodingglobal.com/auth/logout. When set, signing out of MCG Learn also signs the learner out of the Lab. Leave empty until the Lab supports it.",
+  },
+  {
+    key: "PRACTICE_LAB_WEBHOOK_SECRET",
+    group: "practiceLab",
+    label: "Webhook signing secret",
+    secret: true,
+    help: "Given when the Lab registers /api/v1/webhooks/practice-lab. Lets finished Lab attempts complete course lessons straight away.",
+  },
 
   {
     key: "RAZORPAY_KEY_ID",

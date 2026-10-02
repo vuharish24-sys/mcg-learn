@@ -662,3 +662,52 @@ Asked for by the user: store integration configuration in the database rather th
 - The Integrations page now shows a warning when the encryption key is missing or invalid, and a failed save says why instead of returning a generic 500 (`encryptionKeyProblem()` in `src/lib/encryption.ts`).
 - Verified on the live site before this fix: Razorpay "Test connection" reported connected (test-mode keys, no webhook secret yet), and WordPress reported "Connected as mcglearn-api".
 - Leftover unused Moodle/LTI env vars (`LTI_PLATFORM_*`, including a private key, and `MOODLE_LTI_*`) are still on Netlify; they're safe to delete.
+
+**State at end of day (2026-10-02)**: on the live site, Admin > Integrations holds the Practice Lab **test** institute key (saved by the admin); "Test connection" reports connected. The user chose this deliberately for testing while Razorpay is still in test mode. **Before real sales**: switch Practice Lab > API key ID and API secret to the production institute's key (two field edits, no redeploy), and switch Razorpay to live keys. `RAZORPAY_WEBHOOK_SECRET` is still not set.
+
+---
+
+## 39. Practice Lab exercises inside courses: per-exercise access and completion (uncommitted)
+
+Asked for by the user: add exercises created in the Practice Lab alongside course content. Two choices are made per exercise placed in a course, both configurable as the user asked.
+
+**Schema**: `LearningPathItem.labAccessMode` (`INCLUDED` default / `EXTRA`) and `labCompletionRule` (`ON_PASS` / `ON_FINISH` / `MANUAL` default), as new enums `PracticeLabAccessMode` and `PracticeLabCompletionRule`. Only meaningful for `PRACTICE_LAB_EXAM` items. Migration `20261002160000_practice_lab_in_courses` is purely additive (2 enums + 2 columns with defaults), generated with `prisma migrate diff` against the live DB. Applying it was first blocked by the auto-mode classifier; applied after the user said "apply it" (`migrate status`: up to date).
+
+**Access** (`practiceLabService.resolveAccess`), in order: the learner's own paid purchase of the exercise (grant ref = Purchase id); the exercise in a published course with access `INCLUDED` that the learner has access to, via `contentAccessService` on that lesson, which covers free courses and bought course/module/lesson/bundle/installment (ref `path_<courseId>_<feedItemId>`, stable across course edits, which recreate item rows); or the exercise priced at ₹0 (ref `free_<feedItemId>`). Course-included and free access have no payment event, so the grant is sent on Launch, which already re-sent grants by ref. Checkout refuses a ₹0 exercise ("This is free").
+
+**Completion**: `practiceLabService.syncCompletions` reads the learner's Lab attempts (`GET /institute/attempts`, scope `attempts.read`, now added to the test key by the Lab) and marks a lesson complete via `markItemComplete(..., "system")`, which issues the certificate/badge as usual, when an attempt matches the mapping and meets the rule. Matching is by exam ID for exam grants, or by program code with `exam: null` for drills. `ON_FINISH` = `status === "graded"`; `ON_PASS` = the lesson's Pass % against `counted_pct` if set, otherwise the Lab's `passed === true`. Drills have `passed: null`, so on-pass for a drill needs a Pass %. It runs when the learner opens the exercise page or the course page, and from a new webhook `POST /api/v1/webhooks/practice-lab` (`attempt.completed`, verified as hex HMAC-SHA256 of `timestamp.body` with a 5-minute window, secret in Admin > Integrations as `PRACTICE_LAB_WEBHOOK_SECRET`; the learner comes from `attempt.learner.external_ref`, which the Lab adds in its next release). The learner's own "Mark as completed" is refused for exercises set to on-pass/on-finish, so it can't be skipped.
+
+**UI**: the course editor shows "Practice Lab access" and "Counts as complete" selects on rows whose item is a Practice Lab exercise. The exercise page shows "Included with <course>" or "Free", links back to the course, and when opened from a course shows either the mark-complete button (`MANUAL`), an "it completes automatically when you pass/finish" note, or "Completed in this course". The admin price label notes that 0 = free.
+
+**Existing bug fixed along the way**: `learningPathItemSchema` only declared feed item, order, required and pass %, so Zod silently stripped the **module picker and per-lesson price** from every course save (§35's module/lesson pricing was only ever exercised through the service directly). Confirmed with a direct parse test; no data affected, since no course used modules or lesson prices yet. The fields are now declared.
+
+**Verified**: `tsc`, `eslint` and `npm run build` clean. A 17-check script ran against the shared DB and the real Lab test institute, creating a test course through the same `learningPathSchema` the admin form posts to. All passed:
+- The validator now keeps the lab settings and the lesson price.
+- A lesson price on the item withholds course access until bought.
+- An included item resolves to course access under ref `path_<course>_<item>`; an extra item has no access without a purchase; a ₹0 item is free, and checkout refuses it.
+- The learner can't tick off an on-finish exercise.
+- The test learner's real attempts (one abandoned drill) complete nothing; abandoned and wrong-exam attempts don't count; ON_FINISH completes at any graded score; ON_PASS at 60% rejects 55% and accepts 72%.
+- The webhook rejects a bad signature, completes on a valid one, and a retry is harmless.
+- Launching a course-included exercise issued a real hand-off URL. Its Lab grant was revoked by ref afterwards (200, revoked).
+
+Then, on the local dev server as the test learner: the course page lists both exercises; the included one shows "Included with [course]", Launch, and "completes automatically when you pass … (70% or more)"; the extra one shows "Buy for ₹500". All test rows deleted (0 left). Not seen: the course editor's new selects, which need an admin login.
+
+**Noticed, not changed**: `POST /api/v1/learning-paths/[id]/complete` doesn't check that the learner has access to the item (pre-existing, also true for quizzes). And saving a course deletes and recreates all its items, so a `Purchase`/`InstallmentPlan`/`BundleItem` pointing at a lesson's item id would block or break the save once lessons are sold individually.
+
+---
+
+## 40. Logout and "back to MCG Learn" across the Practice Lab (uncommitted)
+
+The user asked what happens when someone opens an exercise and then logs out. The answer was that a launch's Lab session was independent of MCG Learn's. Logging out of MCG Learn left the Lab signed in, possibly mid-exam, for the next person at a shared computer. Logging out of the Lab left MCG Learn signed in, with no way back. This is the same gap §36 closed for WordPress. Requested from the Practice Lab session, which built all five pieces (Lab commit `9bda162`, live with its next release) and allowlisted `mcg-learn.netlify.app` on both institutes:
+- `handoff.return_to`: stored per Lab session, never on the user.
+- A "Back to MCG Learn" link in the Lab's user menu.
+- Lab sign-out → our `GET /api/v1/auth/logout` (its `integration.logout_url` setting).
+- `GET /auth/logout?redirect_to=…` on the Lab: no CSRF token needed, redirects only to allowlisted https hosts, and works with no Lab session.
+- Handoff sessions now idle out after 30 minutes (normal Lab sessions: 120). On expiry the learner goes to `return_to`.
+
+**Our side**:
+- Every launch sends `return_to` = the exercise page, keeping `?learningPathId` so the course context survives. It's sent only when the app URL is https, since the Lab refuses http, so a local dev server sends none.
+- Both Sign out buttons (sidebar and mobile nav) now sign out in the browser and then do a full navigation to `/api/v1/auth/logout`. That route signs out server-side and, when `PRACTICE_LAB_LOGOUT_URL` is set in Admin > Integrations, passes through the Lab's logout before landing on `/login`.
+- The Lab logout URL is a setting, not hardcoded, because it returns 404 until the Lab's release. Shipping the chain unconditionally would have sent every logout to a Lab error page. Set it to `https://lab.medicalcodingglobal.com/auth/logout` once the Lab confirms the release is live; no redeploy needed. If the Lab ever redirects its own sign-out to our route, the chain is: Lab logout → our route → Lab logout (no session, just redirects) → `/login`, with no loop.
+
+**Verified**: `tsc` and `eslint` clean. Live, before the Lab's release: the Lab already accepts `return_to` (ignored until the release) and its logout URL returns 404, which is why it's gated. A launch with the app URL as http sent no `return_to`; with it as https, the handoff carried `return_to` = the exercise page with its `learningPathId`. Both launches issued a hand-off URL and shared one entitlement (same ref), revoked afterwards. Not tested: the logout route end to end, since signing the test learner out of the browser pane would lose a session that can't be re-entered without a password; it needs a check after deploy.

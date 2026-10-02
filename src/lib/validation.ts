@@ -399,6 +399,12 @@ export const learningPathItemSchema = z.object({
   sortOrder: z.coerce.number().int().min(0),
   isRequired: z.coerce.boolean().default(true),
   passPercentage: z.coerce.number().int().min(0).max(100).nullable().optional(),
+  // These were missing, so Zod silently stripped the module picker and lesson
+  // price from every save.
+  moduleId: z.string().min(1).nullable().optional(),
+  priceInPaise: z.coerce.number().int().min(100).nullable().optional(),
+  labAccessMode: z.enum(["INCLUDED", "EXTRA"]).optional(),
+  labCompletionRule: z.enum(["ON_PASS", "ON_FINISH", "MANUAL"]).optional(),
 });
 
 export const learningPathSchema = z.object({

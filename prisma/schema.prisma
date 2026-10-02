@@ -1303,19 +1303,19 @@ model LearningPath {
  * price). See docs/SESSION_CHANGELOG.md §30/§35 for the pricing model.
  */
 model LearningPathModule {
-  id               String            @id @default(cuid())
-  learningPathId   String            @map("learning_path_id")
-  learningPath     LearningPath      @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  id               String             @id @default(cuid())
+  learningPathId   String             @map("learning_path_id")
+  learningPath     LearningPath       @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
   title            String
   description      String?
-  sortOrder        Int               @default(0) @map("sort_order")
-  priceInPaise     Int?              @map("price_in_paise")
+  sortOrder        Int                @default(0) @map("sort_order")
+  priceInPaise     Int?               @map("price_in_paise")
   items            LearningPathItem[]
   purchases        Purchase[]
   installmentPlans InstallmentPlan[]
   bundleItems      BundleItem[]
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
 
   @@index([learningPathId, sortOrder])
   @@map("learning_path_modules")
@@ -1627,25 +1627,29 @@ model TutorSessionRequest {
 }
 
 model LearningPathItem {
-  id               String              @id @default(cuid())
-  learningPathId   String              @map("learning_path_id")
-  learningPath     LearningPath        @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
-  feedItemId       String              @map("feed_item_id")
-  feedItem         FeedItem            @relation(fields: [feedItemId], references: [id])
-  moduleId         String?             @map("module_id")
-  module           LearningPathModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
-  sortOrder        Int                 @map("sort_order")
-  isRequired       Boolean             @default(true) @map("is_required")
-  passPercentage   Int?                @map("pass_percentage")
+  id                String                    @id @default(cuid())
+  learningPathId    String                    @map("learning_path_id")
+  learningPath      LearningPath              @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  feedItemId        String                    @map("feed_item_id")
+  feedItem          FeedItem                  @relation(fields: [feedItemId], references: [id])
+  moduleId          String?                   @map("module_id")
+  module            LearningPathModule?       @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  sortOrder         Int                       @map("sort_order")
+  isRequired        Boolean                   @default(true) @map("is_required")
+  passPercentage    Int?                      @map("pass_percentage")
   /**
    * Price in paise for buying just this one lesson. Null = not separately
    * for sale — reachable only via its module or the whole course, if those
    * are priced.
    */
-  priceInPaise     Int?                @map("price_in_paise")
-  purchases        Purchase[]
-  installmentPlans InstallmentPlan[]
-  bundleItems      BundleItem[]
+  priceInPaise      Int?                      @map("price_in_paise")
+  /// PRACTICE_LAB_EXAM items only: whether course access includes the Lab exercise, or it's bought separately.
+  labAccessMode     PracticeLabAccessMode     @default(INCLUDED) @map("lab_access_mode")
+  /// PRACTICE_LAB_EXAM items only: what counts as completing it. ON_PASS uses passPercentage, else the Lab's own pass mark.
+  labCompletionRule PracticeLabCompletionRule @default(MANUAL) @map("lab_completion_rule")
+  purchases         Purchase[]
+  installmentPlans  InstallmentPlan[]
+  bundleItems       BundleItem[]
 
   @@unique([learningPathId, feedItemId])
   @@index([learningPathId, sortOrder])
@@ -1953,4 +1957,20 @@ model IntegrationConfig {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("integration_configs")
+}
+
+enum PracticeLabAccessMode {
+  /// Anyone with access to the course (free, or bought course/module/lesson/bundle/installment) gets it.
+  INCLUDED
+  /// Bought on its own through the Practice Lab item's own price, even inside the course.
+  EXTRA
+}
+
+enum PracticeLabCompletionRule {
+  /// Completes when the learner passes a Lab attempt.
+  ON_PASS
+  /// Completes on any finished Lab attempt, whatever the score.
+  ON_FINISH
+  /// The learner marks it complete themselves.
+  MANUAL
 }

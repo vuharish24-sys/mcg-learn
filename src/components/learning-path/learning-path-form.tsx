@@ -16,6 +16,8 @@ type PathItem = {
   passPercentage: string;
   moduleId: string;
   priceRupees: string;
+  labAccessMode: "INCLUDED" | "EXTRA";
+  labCompletionRule: "ON_PASS" | "ON_FINISH" | "MANUAL";
 };
 
 export function LearningPathForm({
@@ -54,7 +56,7 @@ export function LearningPathForm({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<PathItem[]>(
-    initial?.items ?? [{ feedItemId: "", sortOrder: 0, isRequired: true, passPercentage: "", moduleId: "", priceRupees: "" }],
+    initial?.items ?? [{ feedItemId: "", sortOrder: 0, isRequired: true, passPercentage: "", moduleId: "", priceRupees: "", labAccessMode: "INCLUDED", labCompletionRule: "MANUAL" }],
   );
   const [requiredQuizFeedItemId, setRequiredQuizFeedItemId] = useState(
     initial?.requiredQuizFeedItemId ?? "",
@@ -72,7 +74,7 @@ export function LearningPathForm({
   function addItem() {
     setItems((current) => [
       ...current,
-      { feedItemId: "", sortOrder: current.length, isRequired: true, passPercentage: "", moduleId: "", priceRupees: "" },
+      { feedItemId: "", sortOrder: current.length, isRequired: true, passPercentage: "", moduleId: "", priceRupees: "", labAccessMode: "INCLUDED", labCompletionRule: "MANUAL" },
     ]);
   }
 
@@ -115,6 +117,8 @@ export function LearningPathForm({
           passPercentage: item.passPercentage ? Number(item.passPercentage) : null,
           moduleId: item.moduleId || null,
           priceInPaise: item.priceRupees ? Math.round(Number(item.priceRupees) * 100) : null,
+          labAccessMode: item.labAccessMode,
+          labCompletionRule: item.labCompletionRule,
         })),
     };
 
@@ -306,6 +310,33 @@ export function LearningPathForm({
                   onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, priceRupees: e.target.value } : row))}
                   className="sm:col-span-2"
                 />
+                {feedItems.find((feed) => feed.value === item.feedItemId)?.type === "PRACTICE_LAB_EXAM" && (
+                  <>
+                    <label className="text-xs text-slate-500 sm:col-span-2">
+                      Practice Lab access
+                      <select
+                        value={item.labAccessMode}
+                        onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, labAccessMode: e.target.value as PathItem["labAccessMode"] } : row))}
+                        className={`${fieldClassName} mt-1`}
+                      >
+                        <option value="INCLUDED">Included with this course</option>
+                        <option value="EXTRA">Extra — bought separately at the exercise&apos;s own price</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-slate-500 sm:col-span-2">
+                      Counts as complete
+                      <select
+                        value={item.labCompletionRule}
+                        onChange={(e) => setItems((current) => current.map((row, i) => i === index ? { ...row, labCompletionRule: e.target.value as PathItem["labCompletionRule"] } : row))}
+                        className={`${fieldClassName} mt-1`}
+                      >
+                        <option value="ON_PASS">When the learner passes it (uses Pass %, else the Lab&apos;s pass mark)</option>
+                        <option value="ON_FINISH">When the learner finishes any attempt</option>
+                        <option value="MANUAL">When the learner marks it complete</option>
+                      </select>
+                    </label>
+                  </>
+                )}
               </div>
             ))}
           </div>

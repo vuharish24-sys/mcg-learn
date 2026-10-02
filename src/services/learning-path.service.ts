@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { PracticeLabAccessMode, PracticeLabCompletionRule, Prisma } from "@prisma/client";
 import { AppValidationError } from "@/lib/api";
 import { getPathFeedItemHref } from "@/lib/feed-actions";
 import { prisma } from "@/lib/prisma";
@@ -26,6 +26,8 @@ type PathItemInput = {
   passPercentage?: number | null;
   moduleId?: string | null;
   priceInPaise?: number | null;
+  labAccessMode?: PracticeLabAccessMode;
+  labCompletionRule?: PracticeLabCompletionRule;
 };
 
 async function assertRequiredQuizInPathItems(
@@ -92,6 +94,8 @@ export const learningPathService = {
                 passPercentage: item.passPercentage ?? null,
                 moduleId: item.moduleId ?? null,
                 priceInPaise: item.priceInPaise ?? null,
+                labAccessMode: item.labAccessMode ?? "INCLUDED",
+                labCompletionRule: item.labCompletionRule ?? "MANUAL",
               })),
             }
           : undefined,
@@ -139,6 +143,8 @@ export const learningPathService = {
               passPercentage: item.passPercentage ?? null,
               moduleId: item.moduleId ?? null,
               priceInPaise: item.priceInPaise ?? null,
+              labAccessMode: item.labAccessMode ?? "INCLUDED",
+              labCompletionRule: item.labCompletionRule ?? "MANUAL",
             })),
           });
         }
@@ -177,15 +183,37 @@ export const learningPathService = {
     });
   },
 
-  async markItemComplete(userId: string, learningPathId: string, feedItemId: string) {
+  /**
+   * `source: "learner"` is the learner's own "Mark as completed" click;
+   * "system" is completion the app records itself (e.g. a passed Practice
+   * Lab attempt). A Practice Lab item set to complete on pass/finish can only
+   * be completed by the system, or the learner could skip the exercise.
+   */
+  async markItemComplete(
+    userId: string,
+    learningPathId: string,
+    feedItemId: string,
+    source: "learner" | "system" = "learner",
+  ) {
     const path = await prisma.learningPath.findUnique({
       where: { id: learningPathId },
-      include: { items: true },
+      include: { items: { include: { feedItem: { select: { type: true } } } } },
     });
     if (!path) throw new Error("Learning path not found");
 
     const pathItem = path.items.find((item) => item.feedItemId === feedItemId);
     if (!pathItem) throw new Error("Feed item is not part of this learning path");
+    if (
+      source === "learner" &&
+      pathItem.feedItem.type === "PRACTICE_LAB_EXAM" &&
+      pathItem.labCompletionRule !== "MANUAL"
+    ) {
+      throw new AppValidationError(
+        pathItem.labCompletionRule === "ON_PASS"
+          ? "This exercise completes automatically when you pass it in the Practice Lab."
+          : "This exercise completes automatically when you finish an attempt in the Practice Lab.",
+      );
+    }
 
     await prisma.userPathItemCompletion.upsert({
       where: { userId_learningPathId_feedItemId: { userId, learningPathId, feedItemId } },

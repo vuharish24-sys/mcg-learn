@@ -1,5 +1,5 @@
-import { createHash, createHmac, randomBytes } from "crypto";
-import { requireConfig } from "@/lib/app-config";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { getConfig, requireConfig } from "@/lib/app-config";
 
 /**
  * Client for the Practice Lab institute API (lab.medicalcodingglobal.com) —
@@ -80,7 +80,17 @@ export type PracticeLabGrant = (
  * learner can't start it). The link is single use and `ttl_sec` is clamped to
  * 60..86400.
  */
-type Handoff = { redirect_to?: `/${string}`; ttl_sec?: number };
+type Handoff = {
+  redirect_to?: `/${string}`;
+  ttl_sec?: number;
+  /**
+   * Absolute https URL back into MCG Learn, allowlisted per institute on the
+   * Lab. The Lab keeps it for that session only and uses it for a "Back to
+   * MCG Learn" link, for where a sign-out lands (our logout route), and for
+   * where an idle-expired session goes.
+   */
+  return_to?: string;
+};
 
 type EnrolmentResponse = {
   learner: unknown;
@@ -106,6 +116,41 @@ export function enrolLearner(
     ...(grants ? { grants } : {}),
     ...(handoff ? { handoff } : {}),
   });
+}
+
+/** One attempt as the Lab's institute API and attempt.completed webhook describe it. */
+export type PracticeLabAttempt = {
+  id: string;
+  /** Null for program drills. `id` is the same exam public id we grant. */
+  exam: { id: string; name: string } | null;
+  program: string;
+  mode: string;
+  /** "graded" is the only finished-and-scored state. */
+  status?: "in_progress" | "submitted" | "graded" | "abandoned" | "expired";
+  counted_pct: number | null;
+  /** Null before grading and for modes not judged against a pass mark (e.g. drills). */
+  passed: boolean | null;
+};
+
+/** GET /institute/attempts for one learner (scope attempts.read), newest first, up to 200. */
+export async function listLearnerAttempts(externalRef: string, filter: { exam?: string } = {}) {
+  const query = new URLSearchParams({ learner: externalRef, per_page: "200" });
+  if (filter.exam) query.set("exam", filter.exam);
+  const result = await callApi<{ data: PracticeLabAttempt[] }>("GET", `/institute/attempts?${query.toString()}`);
+  return result.data;
+}
+
+/**
+ * Verifies an incoming Lab webhook: X-Lab-Signature = hex HMAC-SHA256(secret,
+ * timestamp + "." + raw body), with the timestamp within five minutes.
+ */
+export async function verifyPracticeLabWebhook(rawBody: string, timestamp: string | null, signature: string | null) {
+  const secret = await getConfig("PRACTICE_LAB_WEBHOOK_SECRET");
+  if (!secret || !timestamp || !signature) return false;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  const expected = Buffer.from(createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex"));
+  const given = Buffer.from(signature);
+  return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
 /**

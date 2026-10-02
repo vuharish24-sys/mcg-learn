@@ -90,7 +90,7 @@ export default async function AdminPracticeLabExamsPage() {
                     },
                     { name: "examId", label: "Practice Lab exam ID (copy from the Lab's /staff/exams page) — for \"One exam\"", type: "text" },
                     { name: "programCode", label: "Program code from the Lab's /staff/programs page (e.g. CPC) — for \"Whole program\"", type: "text" },
-                    { name: "priceInPaise", label: "Price in paise (e.g. 150000 = ₹1,500)", type: "number", required: true },
+                    { name: "priceInPaise", label: "Price in paise (e.g. 150000 = ₹1,500; 0 = free)", type: "number", required: true },
                     { name: "isActive", label: "For sale", type: "checkbox", defaultValue: "true" },
                   ]}
                 />

@@ -117,6 +117,8 @@ export default async function AdminLearningPathsPage() {
                             passPercentage: item.passPercentage?.toString() ?? "",
                             moduleId: item.moduleId ?? "",
                             priceRupees: item.priceInPaise ? String(item.priceInPaise / 100) : "",
+                            labAccessMode: item.labAccessMode,
+                            labCompletionRule: item.labCompletionRule,
                           })),
                         }}
                       />

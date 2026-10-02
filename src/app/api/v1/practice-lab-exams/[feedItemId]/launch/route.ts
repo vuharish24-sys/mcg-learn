@@ -14,7 +14,10 @@ export async function GET(request: Request, { params }: Params) {
     const hasAccess = await practiceLabService.hasAccess(user.id, feedItemId);
     if (!hasAccess) return apiError("You haven't purchased this", 403);
 
-    const loginUrl = await practiceLabService.getLaunchUrl(user.id, feedItemId);
+    // Back to the exercise page, keeping the course context it was opened from.
+    const learningPathId = new URL(request.url).searchParams.get("learningPathId");
+    const returnPath = `/feed/${feedItemId}/practice-lab-exam${learningPathId ? `?learningPathId=${encodeURIComponent(learningPathId)}` : ""}`;
+    const loginUrl = await practiceLabService.getLaunchUrl(user.id, feedItemId, returnPath);
     return NextResponse.redirect(loginUrl);
   } catch (error) {
     return handleApiError(error);

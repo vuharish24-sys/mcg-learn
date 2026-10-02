@@ -6,6 +6,7 @@ import { getPathFeedItemHref } from "@/lib/feed-actions";
 import { pathCoverImageUrl, pathPreviewImages } from "@/lib/learning-path-media";
 import { feedService } from "@/services/feed.service";
 import { learningPathService } from "@/services/learning-path.service";
+import { practiceLabService } from "@/services/practice-lab.service";
 import { purchaseService } from "@/services/purchase.service";
 import { contentAccessService } from "@/services/content-access.service";
 import { LearningPathStartButton } from "@/components/learning-path/learning-path-start-button";
@@ -27,6 +28,9 @@ export default async function LearningPathDetailPage({
   const path = await learningPathService.findByIdOrSlug(slug);
   if (!path || path.status !== "PUBLISHED") notFound();
 
+  // Pick up Practice Lab lessons finished since the last visit (no-op when
+  // the course has none set to complete on pass/finish).
+  await practiceLabService.syncCompletions(user.id, { learningPathId: path.id });
   const detail = await learningPathService.getPathWithUserProgress(path.id, user.id);
   if (!detail) notFound();
 

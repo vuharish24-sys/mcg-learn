@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getVisitedHrefs, markHrefVisited } from "@/lib/visited-nav";
 import {
@@ -58,7 +58,6 @@ export function PortalNav({
   logoUrl?: string | null;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [visited, setVisited] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -168,8 +167,8 @@ export function PortalNav({
           type="button"
           onClick={async () => {
             await createSupabaseBrowserClient().auth.signOut();
-            router.replace("/login");
-            router.refresh();
+            // Full navigation: the server route may chain through the Practice Lab's logout.
+            window.location.assign("/api/v1/auth/logout");
           }}
           className="flex min-w-20 flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-[10px] text-slate-600 transition-colors dark:text-slate-400"
         >
