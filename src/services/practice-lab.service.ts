@@ -25,7 +25,7 @@ function launchPathFor(mapping: Mapping | null): `/${string}` {
 }
 
 /** Whether an attempt satisfies a course item's completion rule for this mapping. */
-function attemptCompletes(
+export function attemptCompletes(
   attempt: PracticeLabAttempt,
   mapping: Mapping,
   rule: "ON_PASS" | "ON_FINISH",

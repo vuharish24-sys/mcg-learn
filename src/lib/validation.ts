@@ -142,7 +142,52 @@ export const purchaseCheckoutSchema = z.object({
     "INSTALLMENT",
   ]),
   id: z.string().min(1),
+  couponCode: z.string().trim().max(40).optional().nullable(),
 });
+
+export const couponQuoteSchema = z.object({
+  purchasableType: purchaseCheckoutSchema.shape.purchasableType,
+  id: z.string().min(1),
+  code: z.string().trim().min(1).max(40),
+});
+
+const couponTargetTypes = [
+  "LEARNING_PATH",
+  "LEARNING_PATH_MODULE",
+  "LEARNING_PATH_ITEM",
+  "BUNDLE",
+  "TUTOR_LMS_COURSE",
+  "PRACTICE_LAB_EXAM",
+  "PROGRAM",
+] as const;
+
+const optionalDate = z.union([z.coerce.date(), z.literal(""), z.null()]).optional().transform((v) => (v === "" ? null : v));
+const optionalPositiveInt = z
+  .union([z.coerce.number().int().min(1), z.literal(""), z.null()])
+  .optional()
+  .transform((v) => (v === "" ? null : v));
+
+export const couponSchema = z
+  .object({
+    code: z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, - and _ only"),
+    description: z.string().trim().max(500).nullable().optional(),
+    discountType: z.enum(["FLAT", "PERCENT"]),
+    discountValue: z.coerce.number().int().min(1),
+    maxDiscountPaise: optionalPositiveInt,
+    minAmountPaise: optionalPositiveInt,
+    startsAt: optionalDate,
+    expiresAt: optionalDate,
+    isActive: z.coerce.boolean().default(true),
+    maxRedemptions: optionalPositiveInt,
+    maxPerUser: optionalPositiveInt,
+    targets: z
+      .array(z.object({ targetType: z.enum(couponTargetTypes), targetId: z.string().min(1) }))
+      .min(1, "Pick at least one item the coupon applies to"),
+  })
+  .refine((v) => v.discountType !== "PERCENT" || v.discountValue <= 100, {
+    message: "A percentage discount can't be more than 100",
+    path: ["discountValue"],
+  });
 
 export const tutorSessionRequestSchema = z.object({
   trainerId: z.string().min(1),
@@ -660,6 +705,8 @@ export const benefitCreateSchema = z
     startsAt: z.coerce.date().nullable().optional(),
     expiresAt: z.coerce.date().nullable().optional(),
     isActive: z.coerce.boolean().default(true),
+    /** PROMO_CODE only: the checkout coupon this benefit advertises. */
+    couponId: z.string().min(1).nullable().optional(),
   })
   .refine((v) => v.kind !== "DISCOUNT_FLAT" || (v.discountAmount ?? 0) > 0, {
     message: "Discount amount is required for a flat discount",
@@ -681,4 +728,5 @@ export const benefitUpdateSchema = z.object({
   startsAt: z.coerce.date().nullable().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
   isActive: z.coerce.boolean().optional(),
+  couponId: z.string().min(1).nullable().optional(),
 });

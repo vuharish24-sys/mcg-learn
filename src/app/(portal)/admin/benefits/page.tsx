@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { benefitService, isBenefitActive } from "@/services/benefit.service";
+import { prisma } from "@/lib/prisma";
 import { formatDate, enumLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +21,10 @@ function benefitValueLabel(benefit: {
 
 export default async function AdminBenefitsPage() {
   await requireRole(["ADMIN"]);
-  const benefits = await benefitService.list();
+  const [benefits, coupons] = await Promise.all([
+    benefitService.list(),
+    prisma.coupon.findMany({ select: { id: true, code: true }, orderBy: { code: "asc" } }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -34,7 +38,7 @@ export default async function AdminBenefitsPage() {
             schedule without needing to touch the program itself.
           </p>
         </div>
-        <BenefitForm />
+        <BenefitForm coupons={coupons} />
       </div>
 
       <div className="grid gap-4">
@@ -80,7 +84,9 @@ export default async function AdminBenefitsPage() {
                 </p>
                 <BenefitForm
                   benefitId={benefit.id}
+                  coupons={coupons}
                   initial={{
+                    couponId: benefit.couponId,
                     title: benefit.title,
                     kind: benefit.kind,
                     code: benefit.code,

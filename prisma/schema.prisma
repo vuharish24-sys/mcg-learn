@@ -528,6 +528,10 @@ model Lead {
   assignedOfficer   User?      @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
   followUpAt        DateTime?  @map("follow_up_at")
   source            String
+  /// Program enquiries: the coupon the learner entered (checked valid when submitted), for staff to honour offline.
+  couponId          String?    @map("coupon_id")
+  coupon            Coupon?    @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  couponCode        String?    @map("coupon_code")
   notes             LeadNote[]
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
@@ -1444,10 +1448,16 @@ model Purchase {
   status                PurchaseStatus       @default(PENDING)
   razorpayOrderId       String               @unique @map("razorpay_order_id")
   razorpayPaymentId     String?              @map("razorpay_payment_id")
+  /// Set when a coupon was applied: amountPaise is what was charged, originalAmountPaise the price before the discount.
+  couponId              String?              @map("coupon_id")
+  coupon                Coupon?              @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  originalAmountPaise   Int?                 @map("original_amount_paise")
+  discountPaise         Int?                 @map("discount_paise")
   createdAt             DateTime             @default(now()) @map("created_at")
   updatedAt             DateTime             @updatedAt @map("updated_at")
 
   @@index([userId])
+  @@index([couponId])
   @@index([learningPathId])
   @@index([learningPathModuleId])
   @@index([learningPathItemId])
@@ -1918,6 +1928,9 @@ model Benefit {
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
   variantMappings CourseVariantBenefit[]
+  /// PROMO_CODE benefits: the checkout coupon whose code this advertises; its code and validity win over `code`.
+  couponId        String?                @map("coupon_id")
+  coupon          Coupon?                @relation(fields: [couponId], references: [id], onDelete: SetNull)
 
   @@map("benefits")
 }
@@ -1973,4 +1986,76 @@ enum PracticeLabCompletionRule {
   ON_FINISH
   /// The learner marks it complete themselves.
   MANUAL
+}
+
+/**
+ * What a coupon can apply to. The in-app ones match PurchasableType and take
+ * the same id checkout does (the feed item id for TUTOR_LMS_COURSE and
+ * PRACTICE_LAB_EXAM). PROGRAM is an off-platform Program (a COURSE feed item):
+ * paid offline, so its code is only checked and recorded on the enquiry lead.
+ */
+enum CouponTargetType {
+  LEARNING_PATH
+  LEARNING_PATH_MODULE
+  LEARNING_PATH_ITEM
+  BUNDLE
+  TUTOR_LMS_COURSE
+  PRACTICE_LAB_EXAM
+  PROGRAM
+}
+
+enum CouponDiscountType {
+  /// discountValue is paise off.
+  FLAT
+  /// discountValue is a percentage (1–100), optionally capped by maxDiscountPaise.
+  PERCENT
+}
+
+/**
+ * A checkout coupon: a code a learner enters on a Buy button. Only applies to
+ * the items listed in its targets — never to everything. Separate from
+ * Benefit, which is a display-only perk on off-platform Programs.
+ */
+model Coupon {
+  id               String             @id @default(cuid())
+  /// Stored uppercase; matched case-insensitively.
+  code             String             @unique
+  description      String?
+  discountType     CouponDiscountType @map("discount_type")
+  discountValue    Int                @map("discount_value")
+  maxDiscountPaise Int?               @map("max_discount_paise")
+  minAmountPaise   Int?               @map("min_amount_paise")
+  startsAt         DateTime?          @map("starts_at")
+  expiresAt        DateTime?          @map("expires_at")
+  isActive         Boolean            @default(true) @map("is_active")
+  /// Total paid uses allowed across all learners; null = unlimited.
+  maxRedemptions   Int?               @map("max_redemptions")
+  /// Paid uses allowed per learner; null = unlimited.
+  maxPerUser       Int?               @default(1) @map("max_per_user")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  targets   CouponTarget[]
+  purchases Purchase[]
+  benefits  Benefit[]
+  leads     Lead[]
+
+  @@map("coupons")
+}
+
+/**
+ * One item a coupon applies to. targetId is the same id checkout takes for
+ * that purchasableType: the course/module/lesson/bundle id, or the feed item
+ * id for TUTOR_LMS_COURSE and PRACTICE_LAB_EXAM.
+ */
+model CouponTarget {
+  id         String           @id @default(cuid())
+  couponId   String           @map("coupon_id")
+  coupon     Coupon           @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  targetType CouponTargetType @map("target_type")
+  targetId   String           @map("target_id")
+
+  @@unique([couponId, targetType, targetId])
+  @@index([targetType, targetId])
+  @@map("coupon_targets")
 }

@@ -711,3 +711,100 @@ The user asked what happens when someone opens an exercise and then logs out. Th
 - The Lab logout URL is a setting, not hardcoded, because it returns 404 until the Lab's release. Shipping the chain unconditionally would have sent every logout to a Lab error page. Set it to `https://lab.medicalcodingglobal.com/auth/logout` once the Lab confirms the release is live; no redeploy needed. If the Lab ever redirects its own sign-out to our route, the chain is: Lab logout → our route → Lab logout (no session, just redirects) → `/login`, with no loop.
 
 **Verified**: `tsc` and `eslint` clean. Live, before the Lab's release: the Lab already accepts `return_to` (ignored until the release) and its logout URL returns 404, which is why it's gated. A launch with the app URL as http sent no `return_to`; with it as https, the handoff carried `return_to` = the exercise page with its `learningPathId`. Both launches issued a hand-off URL and shared one entitlement (same ref), revoked afterwards. Not tested: the logout route end to end, since signing the test learner out of the browser pane would lose a session that can't be re-entered without a password; it needs a check after deploy.
+
+**After deploy `fa8c7b7` (2026-10-02)**: the Lab's release went live. `PRACTICE_LAB_LOGOUT_URL` was set to `https://lab.medicalcodingglobal.com/auth/logout` in Admin > Integrations, at the user's request. Verified without a session: our `/api/v1/auth/logout` → 307 to the Lab's logout with `redirect_to=https://mcg-learn.netlify.app/login` → 302 back to `/login`. The webhook receiver is live (unsigned POST → 401), but registering it on the Lab hit a Lab-side bug (webhook-secret column too narrow on MySQL), fixed in Lab commit `f73f1d2` and pending the Lab's release. Until then, completion syncs on page views only.
+- Webhook registered by the Lab on "MCG Learn (test)" (Lab endpoint id 1, `attempt.completed` only, Lab release `20261002174956-f73f1d2`). The user pasted its signing secret in chat. It was saved to `PRACTICE_LAB_WEBHOOK_SECRET` through `integrationConfigService.set` from a local script (encrypted, shown masked), not typed into a web page. Verified against the live site: a correctly signed test POST → 200 (`ignored`, as a non-`attempt.completed` event), and a bad signature → 401. Because the secret went through chat, rotate it before production; the production institute gets its own registration and secret at switch-over anyway.
+
+---
+
+## 41. Checkout coupons, on items the admin picks (uncommitted)
+
+The user asked whether a coupon can be applied while purchasing. It couldn't: Benefits (§14) are display-only perks on off-platform Programs, their `PROMO_CODE` kind is explicitly "entered elsewhere (no automatic discount math)", and Razorpay checkout always charged the full server-computed price. The user chose codes that work **only on items they pick**, not on everything.
+
+**Schema** (migration `20261003100000_add_coupons`, additive: 2 enums, 2 tables, nullable columns on `purchases`, `benefits` and `leads`; first blocked by the auto-mode classifier, applied after the user said "apply it"; `migrate status`: up to date):
+- `Coupon`: unique uppercase `code`, `FLAT` (paise off) or `PERCENT` (1–100, optional `maxDiscountPaise` cap), optional `minAmountPaise`, `startsAt`/`expiresAt`, `isActive`, `maxRedemptions` (total), and `maxPerUser` (default 1).
+- `CouponTarget`: `targetType` (new `CouponTargetType` enum = the six in-app purchasable types + `PROGRAM`) + `targetId`, the same id checkout takes (the COURSE feed item id for a Program).
+- `Benefit.couponId` links a benefit to a coupon; `Lead.couponId` + `couponCode` record the code entered on an enquiry.
+- `Purchase.couponId`, `originalAmountPaise` and `discountPaise`. `amountPaise` stays what was actually charged.
+
+Separate from `Benefit` on purpose, so the Programs page's perks and real checkout discounts don't get mixed up.
+
+**Rules** (`couponService.evaluate`, run server-side at checkout whatever the preview said):
+- The code must exist, be active and be inside its date window; the item must be one of its targets; the price must meet the minimum.
+- Total and per-learner limits count PAID purchases only. Two checkouts racing for the last use could both succeed, which is acceptable at this volume.
+- Percent discounts round down to the paisa.
+- Targetable: course, module, lesson, bundle, Tutor LMS course, and Practice Lab exam. Not installments or tutor sessions, which are individually priced.
+- A discount leaving between ₹0.01 and ₹0.99 is raised to ₹1, Razorpay's minimum.
+- A discount covering the whole price skips Razorpay: the purchase is created `PAID` with order id `free_<uuid>` and unlocks immediately.
+
+**Code**:
+- `purchaseService` was split into `_resolvePurchasable` (price + links, shared by checkout and the new preview), `quoteCoupon`, and `createOrder(…, couponCode)`.
+- Every PAID side effect (tutor session, Tutor LMS, Practice Lab, installment) is now one `_afterPaid`, shared by client verify, the webhook and free coupon purchases. The duplicated blocks are gone.
+- New `POST /api/v1/purchases/coupon` (preview), plus `couponCode` on `POST /api/v1/purchases/checkout`.
+- Every Buy button (except installment and tutor session) gets a "Have a coupon?" field with Apply. It shows "₹X off" with the original price struck through, and the button becomes "Pay ₹Y" or "Get it free".
+- New admin page `/admin/coupons` (card on the admin dashboard): create, edit and delete coupons, pick the items they apply to from everything currently for sale (with prices), and see uses so far.
+
+**Connected to Benefits** (the user picked two of the options offered):
+- **A Promo-code benefit can be linked to a coupon** (a new "Works at checkout as coupon" picker on the benefit form). Only `PROMO_CODE` benefits can link. A linked benefit gets the coupon's code, start/end dates and on/off state copied onto it, and `couponService.update` keeps those copies in sync. So the benefit card, the Program page and the feed hero show the real, working code without knowing about coupons, and that code works at checkout on the coupon's items.
+- **Program enquiries take a code.** The Program page's enquiry form has an optional "Coupon / promo code" field. `POST /api/v1/feed/[id]/register` checks it with `couponService.validateForProgram`: it must exist, be active, be in its window and target this Program. If not, the learner sees why straight away. A valid code is saved on the lead, and the CRM list and lead page show it ("Coupon to honour") for staff taking payment offline. Program enquiries don't count as coupon uses, since nothing is paid in the app.
+
+**A real bug caught by testing, before anything shipped**: consolidating the four PAID side effects into `_afterPaid` used a find-and-replace that also rewrote `_afterPaid`'s own body into a call to itself. Every payment confirmation (client verify, Razorpay webhook, free coupon) would have recursed until the stack overflowed. It was caught by the first free-coupon test ("Maximum call stack size exceeded"). Fixed, and then the Razorpay webhook path was re-tested on its own: a PENDING purchase → `markPaidFromWebhook` twice → PAID, access opened, and exactly one Lab grant issued (revoked afterwards).
+
+**Verified**: `tsc`, `eslint` and `npm run build` clean. A 30-check script ran against the shared DB (and the real Lab for the free case), all passing:
+- Codes are stored uppercase and matched case-insensitively; duplicates, over-100% and no-item coupons are rejected.
+- 20% of ₹500 capped at ₹50 → ₹450.
+- Refused: wrong item, unknown, expired, not yet valid, paused, below the minimum price, on an installment.
+- A leftover under ₹1 is raised to ₹1.
+- A paid checkout validates the coupon and then needs Razorpay (no local keys).
+- A 100% coupon → PAID with no Razorpay, the coupon/original/discount recorded, and Practice Lab access granted. Its Lab grant was revoked afterwards.
+- The per-learner and total limits are enforced.
+- A Program code is valid only for its Program and can't be used at in-app checkout. Programs and priced items appear in the admin picker.
+- A linked benefit takes the coupon's code and state and follows later code/date edits. A non-promo benefit can't link.
+- The admin list counts paid uses.
+
+Then in the browser on the local dev server:
+- The Buy button: "Have a coupon?" → a Program-only code shows "This coupon doesn't apply to this item." → the right code shows "Coupon E2E-UI20: ₹100 off ~~₹500~~" and "Pay ₹400".
+- The Program enquiry form: a wrong code is refused and creates no lead; the right code creates a lead with `couponCode` E2E-UIPROG.
+
+The browser check also exposed a stale-result bug in both the Buy button and the enquiry form: a slow earlier request's error stayed on screen beside a later success. Both now ignore any response that isn't from the latest attempt, and Enter is ignored while a check is running. Re-checked: only the latest result shows. All test coupons, items, purchases, benefits and leads deleted. Not seen: the Coupons admin page itself, which needs an admin login.
+
+**Not covered**: referral commissions and the CRM don't look at coupon discounts yet. A PENDING purchase doesn't reserve a use.
+
+---
+
+## 42. Hardening pass from the go-live review (uncommitted)
+
+The user asked for work on the "should do soon" list from the go-live review.
+
+**Course-save bug fixed** (`learningPathService.update`): saving a course used to delete and recreate every item, so each lesson got a new id. Anything pointing at the old id (a `Purchase` of a single lesson, an `InstallmentPlan`, a `BundleItem`, a coupon target) was orphaned or blocked the save. Items are now upserted in place on `(learningPathId, feedItemId)`, and only those dropped from the course are deleted. Dropping one that has a purchase, installment plan or bundle entry is refused with a clear message naming it. The transaction timeout was raised to 30s, since there's one upsert per lesson over the pooled connection.
+
+**Access check on manual completion**: `markItemComplete(..., "learner")` now requires `contentAccessService.hasItemAccess`. Before, any signed-in learner could POST completions for paid lessons they never bought, and collect the certificate. System completions (Practice Lab sync) are unaffected.
+
+**Automated tests**: `npm test` runs `tsx --test tests/run.ts`, using Node's built-in test runner with no new dependency. `run.ts` loads every `tests/*.test.ts`, since Node 20 doesn't expand globs on Windows. 11 unit tests, no database:
+- coupon code normalisation and discount maths;
+- Practice Lab completion matching (exam vs drill, graded-only, pass % vs the Lab's verdict, drills without a verdict);
+- the Lab webhook signature and its 5-minute window;
+- a regression test that Lab API requests sign the full `/api/v1/...` path;
+- env-over-database config precedence;
+- the Razorpay webhook signature.
+
+**Evaluation findings rechecked** against live data: 0 published jobs, 0 appointment slots and no availability, one published learning path (2 lessons, one being the Instagram reel "The Unknown Profession", whose embed shows the account's follower count), and the homepage still said "courses" for Programs.
+- Fixed: homepage wording → "programs" throughout.
+- Fixed: the Job board pillar, and the "open jobs" mentions, appear only while at least one job is published. The grid drops to 3 columns. Checked by fetching the logged-out homepage.
+- Left for the user (content decisions): the Instagram lesson, and whether Sessions/Appointments are promoted anywhere else.
+
+**Requested from other sessions**:
+- onlineclass: a least-privilege WordPress role for MCG Learn's Application Password; `mcglearn-api` is currently an administrator.
+- Practice Lab: rotate the test institute's API secret and webhook signing secret, both pasted in chat. The new values go to the user directly, for Admin > Integrations and the local `.env`.
+
+**Verified**: `tsc`, `eslint`, `npm test` (11/11) and `npm run build` clean. A 9-check script against the shared DB passed:
+- A paid lesson can't be completed until bought; a free one can.
+- Editing a course (reorder, reprice, add) kept the bought lesson's id and its purchase.
+- Removing the bought lesson was refused and changed nothing; removing an unbought one worked.
+
+All test rows deleted.
+
+**Secrets rotated and least-privilege WordPress access (same pass)**:
+- The Practice Lab rotated the test institute's API secret and webhook signing secret, both previously pasted in chat. The key ID is unchanged. The user handed over the new values, which were identified by probing: the one the Lab rejected as an API secret (401) is the webhook secret, and the one it accepted (404 for the probe learner) is the API secret. Both were saved through `integrationConfigService.set`, and the API secret also went into the local `.env`. Live Test connection: "Connected — the Lab accepted the key and signature". A signed test POST to the live webhook returned 200.
+- The onlineclass session built a least-privilege WordPress account for MCG Learn: user `mcglearn-integration`, role `mcglearn_integration` with caps `read`, `list_users`, `create_users`, and a new Application Password. Its mu-plugin source is in `deploy/wordpress/mu-plugins/mcglearn-api-role.php`. WP core needed two guards: `editable_roles` is filtered to `subscriber`, since `create_users` alone could create administrators; and `edit_user` is passed only for REST GETs to `/wp/v2/users`, judged by the dispatched REST method so `?_method` or method-override headers can't bypass it, so that find-by-email works without `edit_users`. onlineclass verified the allowed calls work and that every write and escalation attempt gets 403.
+- Verified here with the new credentials: `users/me` → `mcglearn-integration`, find-by-email returns the user's learner account (WP #6), and `/settings` → 403. The username and password were saved in Admin > Integrations and the local `.env`. Netlify's `WORDPRESS_APP_USERNAME` and `WORDPRESS_APP_PASSWORD` were deleted at the user's request, so the database values apply from the next deploy. The old administrator `mcglearn-api` and its Application Passwords are untouched until the switch is confirmed live; then onlineclass revokes them.

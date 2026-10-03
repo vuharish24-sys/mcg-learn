@@ -199,6 +199,7 @@ export default async function FeedCoursePage({
                   defaultEmail={user.email}
                   defaultPhone={user.phone ?? undefined}
                   variantMode={label}
+                  showCouponField
                 />
               )}
             </CardContent>

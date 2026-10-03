@@ -24,7 +24,7 @@ import { getBrandingLogoUrl } from "@/lib/branding";
 export const metadata: Metadata = {
   title: "Explore Medical Coding — Free to Start",
   description:
-    "Free articles, videos, and quizzes to explore medical coding, plus real course info, live scholarships, and career guidance — from Medical Coding Global.",
+    "Free articles, videos, and quizzes to explore medical coding, plus real program info, live scholarships, and career guidance — from Medical Coding Global.",
 };
 
 const benefits = [
@@ -35,13 +35,15 @@ const benefits = [
   },
   {
     icon: GraduationCap,
-    title: "Real courses & live scholarships",
+    title: "Real programs & live scholarships",
     description: "See MCG's expert-led Professional and Specialist programs, with current discounts and scholarships shown up front.",
   },
   {
     icon: Briefcase,
     title: "Job board",
     description: "Browse medical coding job openings sourced from MCG's placement partners.",
+    // Only promoted while there are jobs to show.
+    needsJobs: true,
   },
   {
     icon: Users,
@@ -53,7 +55,7 @@ const benefits = [
 const steps = [
   { title: "Create your free account", description: "Sign up in under a minute — no payment required to get started." },
   { title: "Explore free content", description: "Browse articles, reels, and quizzes to learn the basics and see if medical coding is right for you." },
-  { title: "Discover real programs", description: "Check out course tiers, live scholarships, and open jobs when you're ready to go deeper." },
+  { title: "Discover real programs", description: "Check out program tiers, live scholarships, and open jobs when you're ready to go deeper." },
   { title: "Get career guidance", description: "Talk to a career officer about certification paths and your next step." },
 ];
 
@@ -62,7 +64,7 @@ export default async function HomePage() {
   if (user) {
     redirect(user.role.key === "LEARNER" || user.role.key === "TRAINER" ? "/feed" : "/dashboard");
   }
-  const [, logoUrl, courseItems] = await Promise.all([
+  const [, logoUrl, courseItems, jobCount] = await Promise.all([
     trackVisit("landing"),
     getBrandingLogoUrl(),
     prisma.feedItem.findMany({
@@ -70,7 +72,18 @@ export default async function HomePage() {
       orderBy: { priority: "desc" },
       take: 3,
     }),
+    prisma.feedItem.count({ where: { type: "JOB_POSTING", status: "PUBLISHED" } }),
   ]);
+  const hasJobs = jobCount > 0;
+  // Don't promote the job board while it's empty.
+  const pillars = benefits.filter((benefit) => !benefit.needsJobs || hasJobs);
+  const journey = hasJobs
+    ? steps
+    : steps.map((step) =>
+        step.title === "Discover real programs"
+          ? { ...step, description: "Check out program tiers and live scholarships when you're ready to go deeper." }
+          : step,
+      );
 
   const allVariantIds = courseItems.flatMap((item) => parseFeedContent(item.content).course?.variants.map((v) => v.id) ?? []);
   const benefitsByVariant = allVariantIds.length > 0 ? await benefitService.getActiveForVariantIds(allVariantIds) : new Map();
@@ -112,7 +125,7 @@ export default async function HomePage() {
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-600 dark:text-slate-300">
             Learn the fundamentals through free articles, videos, and quizzes — then see
-            our expert-led courses, current scholarships, and open coding jobs when
+            our expert-led programs and current scholarships{hasJobs ? ", and open coding jobs," : ""} when
             you&apos;re ready to go further.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -126,8 +139,8 @@ export default async function HomePage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-6 pb-20">
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {benefits.map(({ icon: Icon, title, description }) => (
+          <div className={`grid gap-5 sm:grid-cols-2 ${pillars.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+            {pillars.map(({ icon: Icon, title, description }) => (
               <Card key={title} className="border-0 shadow-md">
                 <CardContent className="p-6">
                   <span className="inline-flex rounded-xl bg-gradient-to-br from-teal-600 to-violet-600 p-2.5 text-white">
@@ -145,7 +158,7 @@ export default async function HomePage() {
           <div className="mx-auto max-w-4xl px-6">
             <h2 className="text-center text-3xl font-bold text-slate-900 dark:text-white">How it works</h2>
             <div className="mt-12 grid gap-8 sm:grid-cols-2">
-              {steps.map((step, index) => (
+              {journey.map((step, index) => (
                 <div key={step.title} className="flex gap-4">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-violet-600 text-sm font-bold text-white">
                     {index + 1}
@@ -165,7 +178,7 @@ export default async function HomePage() {
             <div className="mb-8 text-center">
               <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Real programs, when you&apos;re ready</h2>
               <p className="mx-auto mt-3 max-w-2xl text-slate-500">
-                Expert-led courses with live scholarships and current pricing — sign in to see full
+                Expert-led programs with live scholarships and current pricing — sign in to see full
                 details and enroll.
               </p>
             </div>
@@ -189,7 +202,7 @@ export default async function HomePage() {
             </div>
             <div className="mt-8 text-center">
               <Link href="/register" className={buttonVariants({ variant: "outline" })}>
-                Create a free account to see full course details
+                Create a free account to see full program details
               </Link>
             </div>
           </section>

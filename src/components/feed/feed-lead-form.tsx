@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -12,6 +12,7 @@ export function FeedLeadForm({
   defaultEmail,
   defaultPhone,
   variantMode,
+  showCouponField = false,
 }: {
   endpoint: string;
   submitLabel: string;
@@ -20,13 +21,19 @@ export function FeedLeadForm({
   defaultPhone?: string;
   /** For multi-variant courses: which mode/version this submission is for, so the lead is tagged correctly. */
   variantMode?: string;
+  /** Programs: let the learner enter a coupon code, checked and saved on the lead for staff to honour. */
+  showCouponField?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Only the latest submit's result is shown, so a slow earlier one can't overwrite it.
+  const latestSubmit = useRef(0);
+
   async function onSubmit(formData: FormData) {
+    const attempt = ++latestSubmit.current;
     setSubmitting(true);
     setError("");
     setSuccess("");
@@ -39,14 +46,17 @@ export function FeedLeadForm({
         phone: formData.get("phone"),
         notes: formData.get("notes") || null,
         ...(variantMode ? { variantMode } : {}),
+        ...(showCouponField && formData.get("couponCode") ? { couponCode: formData.get("couponCode") } : {}),
       }),
     });
     const result = await response.json();
+    if (attempt !== latestSubmit.current) return;
     setSubmitting(false);
     if (!response.ok) {
       setError(result.error?.message ?? "Unable to submit");
       return;
     }
+    setError("");
     setSuccess("Submitted successfully.");
     router.refresh();
   }
@@ -65,6 +75,12 @@ export function FeedLeadForm({
         <span className="mb-1.5 block text-sm font-medium">Email</span>
         <Input name="email" type="email" defaultValue={defaultEmail} />
       </label>
+      {showCouponField && (
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">Coupon / promo code (optional)</span>
+          <Input name="couponCode" className="uppercase" autoCapitalize="characters" />
+        </label>
+      )}
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium">Notes</span>
         <Textarea name="notes" placeholder="Optional details" />

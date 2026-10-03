@@ -58,7 +58,10 @@ export default async function CrmPage({
                     <p className="mt-1 text-xs font-normal text-slate-500">{lead._count.notes} notes</p>
                   </td>
                   <td className="px-5 py-4">{lead.phone}<p className="text-xs text-slate-500">{lead.email}</p></td>
-                  <td className="px-5 py-4">{lead.source}</td>
+                  <td className="px-5 py-4">
+                    {lead.source}
+                    {lead.couponCode && <span className="ml-2 rounded bg-teal-50 px-1.5 py-0.5 font-mono text-xs text-teal-800">{lead.couponCode}</span>}
+                  </td>
                   <td className="px-5 py-4">{lead.assignedOfficer?.fullName ?? "Unassigned"}</td>
                   <td className="px-5 py-4">{formatDate(lead.followUpAt)}</td>
                   <td className="px-5 py-4"><StatusSelect endpoint={`/api/v1/leads/${lead.id}`} value={lead.status} options={statuses} /></td>

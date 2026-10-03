@@ -43,6 +43,9 @@ export default async function LeadDetailPage({
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div><p className="text-xs text-slate-500">Source</p><p className="font-medium">{lead.source}</p></div>
+            {lead.couponCode && (
+              <div><p className="text-xs text-slate-500">Coupon to honour</p><p className="font-mono font-medium">{lead.couponCode}</p></div>
+            )}
             <div><p className="text-xs text-slate-500">Assigned officer</p><p className="font-medium">{lead.assignedOfficer?.fullName ?? "Unassigned"}</p></div>
             <div><p className="text-xs text-slate-500">Follow-up</p><p className="font-medium">{formatDate(lead.followUpAt)}</p></div>
             <div><p className="text-xs text-slate-500">Created</p><p className="font-medium">{formatDate(lead.createdAt)}</p></div>

@@ -17,9 +17,13 @@ function toLocalInput(value: string | null) {
 export function BenefitForm({
   benefitId,
   initial,
+  coupons = [],
 }: {
   benefitId?: string;
+  /** Checkout coupons a Promo code benefit can be linked to. */
+  coupons?: { id: string; code: string }[];
   initial?: {
+    couponId?: string | null;
     title: string;
     kind: BenefitKind;
     code: string | null;
@@ -35,6 +39,8 @@ export function BenefitForm({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<BenefitKind>(initial?.kind ?? "DISCOUNT_FLAT");
+  const [couponId, setCouponId] = useState(initial?.couponId ?? "");
+  const linked = kind === "PROMO_CODE" && Boolean(couponId);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -44,7 +50,8 @@ export function BenefitForm({
     const payload = {
       title: formData.get("title"),
       kind: formData.get("kind"),
-      code: formData.get("code") || null,
+      code: linked ? null : formData.get("code") || null,
+      couponId: kind === "PROMO_CODE" && couponId ? couponId : null,
       discountAmount: formData.get("discountAmount") || null,
       discountPercent: formData.get("discountPercent") || null,
       description: formData.get("description") || null,
@@ -138,7 +145,24 @@ export function BenefitForm({
               <span className="block text-xs text-slate-500">Shown for display only — a perk never changes the course fee.</span>
             </label>
           )}
-          {(kind === "PROMO_CODE" || kind === "DISCOUNT_FLAT" || kind === "DISCOUNT_PERCENT" || kind === "PERK") && (
+          {kind === "PROMO_CODE" && (
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">Works at checkout as coupon</span>
+              <select value={couponId} onChange={(e) => setCouponId(e.target.value)} className={fieldClassName}>
+                <option value="">Not linked — the code is display only</option>
+                {coupons.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code}
+                  </option>
+                ))}
+              </select>
+              <span className="block text-xs text-slate-500">
+                Linked: the coupon&apos;s code, dates and on/off state are used, and the code works at checkout
+                (and on Program enquiries) for the items the coupon applies to. Manage it under Admin → Coupons.
+              </span>
+            </label>
+          )}
+          {!linked && (
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">Code (optional)</span>
               <Input name="code" defaultValue={initial?.code ?? ""} placeholder="MCGSTART3000" />

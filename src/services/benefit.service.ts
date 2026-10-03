@@ -1,4 +1,5 @@
 import type { Benefit, Prisma } from "@prisma/client";
+import { AppValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { parseFeedContent } from "@/lib/feed-actions";
 
@@ -11,12 +12,12 @@ export const benefitService = {
     return prisma.benefit.findUnique({ where: { id } });
   },
 
-  create(data: Prisma.BenefitUncheckedCreateInput) {
-    return prisma.benefit.create({ data });
+  async create(data: Prisma.BenefitUncheckedCreateInput) {
+    return prisma.benefit.create({ data: await withLinkedCoupon(data) });
   },
 
-  update(id: string, data: Prisma.BenefitUncheckedUpdateInput) {
-    return prisma.benefit.update({ where: { id }, data });
+  async update(id: string, data: Prisma.BenefitUncheckedUpdateInput) {
+    return prisma.benefit.update({ where: { id }, data: await withLinkedCoupon(data) });
   },
 
   delete(id: string) {
@@ -137,6 +138,22 @@ export const benefitService = {
     });
   },
 };
+
+/**
+ * A benefit linked to a checkout coupon only makes sense as a PROMO_CODE, and
+ * advertises that coupon's code, dates and on/off state — copied onto the
+ * benefit so every place that shows a benefit stays right without knowing
+ * about coupons. couponService.update keeps the copies in sync.
+ */
+async function withLinkedCoupon<T extends Prisma.BenefitUncheckedCreateInput | Prisma.BenefitUncheckedUpdateInput>(data: T): Promise<T> {
+  if (typeof data.couponId !== "string") return data;
+  if (data.kind !== undefined && data.kind !== "PROMO_CODE") {
+    throw new AppValidationError("Only a Promo code benefit can be linked to a checkout coupon.");
+  }
+  const coupon = await prisma.coupon.findUnique({ where: { id: data.couponId } });
+  if (!coupon) throw new AppValidationError("Coupon not found");
+  return { ...data, code: coupon.code, startsAt: coupon.startsAt, expiresAt: coupon.expiresAt, isActive: coupon.isActive };
+}
 
 /** True while the benefit is manually active and, if set, within its start/expiry window. */
 export function isBenefitActive(benefit: Pick<Benefit, "isActive" | "startsAt" | "expiresAt">) {

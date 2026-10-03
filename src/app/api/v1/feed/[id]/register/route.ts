@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { getApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { couponService } from "@/services/coupon.service";
 
 const schema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -10,6 +11,8 @@ const schema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
   /** Which course mode/version this submission is for, when the item has multiple variants. */
   variantMode: z.string().trim().max(60).optional(),
+  /** Programs only: a coupon code to be honoured when staff take payment offline. */
+  couponCode: z.string().trim().max(40).nullable().optional(),
 });
 
 export async function POST(
@@ -31,6 +34,10 @@ export async function POST(
     if (!item) return apiError("Feed item not found", 404);
 
     const values = schema.parse(await request.json());
+    // Checked now so the learner hears straight away if it isn't valid;
+    // recorded on the lead for staff. Nothing is discounted here.
+    const coupon =
+      values.couponCode && item.type === "COURSE" ? await couponService.validateForProgram(values.couponCode, item.id) : null;
     const source =
       item.type === "WEBINAR"
         ? `Webinar: ${item.title}`
@@ -46,6 +53,7 @@ export async function POST(
           phone: values.phone,
           source,
           status: "NEW",
+          ...(coupon ? { couponId: coupon.id, couponCode: coupon.code } : {}),
         },
       });
 

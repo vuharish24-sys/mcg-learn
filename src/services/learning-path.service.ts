@@ -2,6 +2,7 @@ import type { PracticeLabAccessMode, PracticeLabCompletionRule, Prisma } from "@
 import { AppValidationError } from "@/lib/api";
 import { getPathFeedItemHref } from "@/lib/feed-actions";
 import { prisma } from "@/lib/prisma";
+import { contentAccessService } from "@/services/content-access.service";
 import { resolveQuizPassPercentage } from "@/lib/quiz-pass";
 import { certificateService } from "@/services/certificate.service";
 import { crmService } from "@/services/crm.service";
@@ -132,20 +133,40 @@ export const learningPathService = {
 
     return prisma.$transaction(async (tx) => {
       if (items) {
-        await tx.learningPathItem.deleteMany({ where: { learningPathId: id } });
-        if (items.length > 0) {
-          await tx.learningPathItem.createMany({
-            data: items.map((item) => ({
-              learningPathId: id,
-              feedItemId: item.feedItemId,
-              sortOrder: item.sortOrder,
-              isRequired: item.isRequired ?? true,
-              passPercentage: item.passPercentage ?? null,
-              moduleId: item.moduleId ?? null,
-              priceInPaise: item.priceInPaise ?? null,
-              labAccessMode: item.labAccessMode ?? "INCLUDED",
-              labCompletionRule: item.labCompletionRule ?? "MANUAL",
-            })),
+        // Update items in place (matched by feed item) rather than deleting
+        // and recreating them: purchases, installment plans, bundles and
+        // coupons point at an item's id, so it must survive an edit.
+        const keep = new Set(items.map((item) => item.feedItemId));
+        const removed = existing.items.filter((item) => !keep.has(item.feedItemId));
+        if (removed.length > 0) {
+          const inUse = await tx.learningPathItem.findMany({
+            where: {
+              id: { in: removed.map((item) => item.id) },
+              OR: [{ purchases: { some: {} } }, { installmentPlans: { some: {} } }, { bundleItems: { some: {} } }],
+            },
+            select: { feedItem: { select: { title: true } } },
+          });
+          if (inUse.length > 0) {
+            throw new AppValidationError(
+              `Can't remove ${inUse.map((item) => `"${item.feedItem.title}"`).join(", ")} — it has been bought, is on an installment plan, or is in a bundle. Unpublish the course or keep the lesson instead.`,
+            );
+          }
+          await tx.learningPathItem.deleteMany({ where: { id: { in: removed.map((item) => item.id) } } });
+        }
+        for (const item of items) {
+          const fields = {
+            sortOrder: item.sortOrder,
+            isRequired: item.isRequired ?? true,
+            passPercentage: item.passPercentage ?? null,
+            moduleId: item.moduleId ?? null,
+            priceInPaise: item.priceInPaise ?? null,
+            labAccessMode: item.labAccessMode ?? "INCLUDED",
+            labCompletionRule: item.labCompletionRule ?? "MANUAL",
+          };
+          await tx.learningPathItem.upsert({
+            where: { learningPathId_feedItemId: { learningPathId: id, feedItemId: item.feedItemId } },
+            create: { learningPathId: id, feedItemId: item.feedItemId, ...fields },
+            update: fields,
           });
         }
       }
@@ -154,7 +175,8 @@ export const learningPathService = {
         data: pathData,
         include: pathInclude,
       });
-    });
+      // One upsert per lesson over the pooled connection: allow more than the 5s default.
+    }, { timeout: 30_000 });
   },
 
   delete(id: string) {
@@ -203,6 +225,11 @@ export const learningPathService = {
 
     const pathItem = path.items.find((item) => item.feedItemId === feedItemId);
     if (!pathItem) throw new Error("Feed item is not part of this learning path");
+    // Without this, any signed-in learner could POST completions for paid
+    // lessons they never bought, and collect the course's certificate.
+    if (source === "learner" && !(await contentAccessService.hasItemAccess(userId, learningPathId, feedItemId))) {
+      throw new AppValidationError("You don't have access to this lesson.");
+    }
     if (
       source === "learner" &&
       pathItem.feedItem.type === "PRACTICE_LAB_EXAM" &&

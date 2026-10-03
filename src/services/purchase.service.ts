@@ -1,13 +1,16 @@
+import { randomUUID } from "node:crypto";
 import type { PurchasableType } from "@prisma/client";
 import { AppValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getRazorpayClient, getRazorpayPublicKeyId, verifyCheckoutSignature } from "@/lib/razorpay";
 import { contentAccessService } from "@/services/content-access.service";
+import { couponService } from "@/services/coupon.service";
 import { practiceLabService } from "@/services/practice-lab.service";
 import { tutorLmsService } from "@/services/tutor-lms.service";
 
 export const purchaseService = {
-  async createOrder(userId: string, purchasableType: PurchasableType, id: string) {
+  /** The price and the Purchase foreign keys for one purchasable unit; throws if it isn't for sale to this learner. */
+  async _resolvePurchasable(userId: string, purchasableType: PurchasableType, id: string) {
     let amountPaise: number;
     let learningPathId: string | null = null;
     let learningPathModuleId: string | null = null;
@@ -70,6 +73,53 @@ export const purchaseService = {
       tutorSessionRequestId = request.id;
     }
 
+    return {
+      amountPaise,
+      links: { learningPathId, learningPathModuleId, learningPathItemId, bundleId, feedItemId, tutorSessionRequestId, installmentId },
+    };
+  },
+
+  /** What the learner would pay with this coupon — the Buy button's "Apply" preview. Throws with the reason if it doesn't apply. */
+  async quoteCoupon(userId: string, purchasableType: PurchasableType, id: string, code: string) {
+    const { amountPaise } = await purchaseService._resolvePurchasable(userId, purchasableType, id);
+    const quote = await couponService.evaluate(userId, code, purchasableType, id, amountPaise);
+    return {
+      code: quote.coupon.code,
+      originalAmountPaise: quote.originalAmountPaise,
+      discountPaise: quote.discountPaise,
+      finalAmountPaise: quote.finalAmountPaise,
+    };
+  },
+
+  async createOrder(userId: string, purchasableType: PurchasableType, id: string, couponCode?: string | null) {
+    const { amountPaise: priceInPaise, links } = await purchaseService._resolvePurchasable(userId, purchasableType, id);
+
+    // The coupon is re-checked here, server-side, whatever the preview said.
+    const quote = couponCode?.trim()
+      ? await couponService.evaluate(userId, couponCode, purchasableType, id, priceInPaise)
+      : null;
+    const amountPaise = quote ? quote.finalAmountPaise : priceInPaise;
+    const couponFields = quote
+      ? { couponId: quote.coupon.id, originalAmountPaise: quote.originalAmountPaise, discountPaise: quote.discountPaise }
+      : {};
+
+    // Fully discounted: nothing for Razorpay to charge, so it's paid now.
+    if (amountPaise === 0) {
+      const purchase = await prisma.purchase.create({
+        data: {
+          userId,
+          purchasableType,
+          ...links,
+          ...couponFields,
+          amountPaise: 0,
+          status: "PAID",
+          razorpayOrderId: `free_${randomUUID()}`,
+        },
+      });
+      await purchaseService._afterPaid(purchase);
+      return { purchaseId: purchase.id, free: true as const, amount: 0, currency: "INR" };
+    }
+
     const razorpay = await getRazorpayClient();
     if (!razorpay) throw new AppValidationError("Payments are not configured yet — contact the site admin.");
 
@@ -83,13 +133,8 @@ export const purchaseService = {
       data: {
         userId,
         purchasableType,
-        learningPathId,
-        learningPathModuleId,
-        learningPathItemId,
-        bundleId,
-        feedItemId,
-        tutorSessionRequestId,
-        installmentId,
+        ...links,
+        ...couponFields,
         amountPaise,
         razorpayOrderId: order.id,
       },
@@ -97,11 +142,27 @@ export const purchaseService = {
 
     return {
       purchaseId: purchase.id,
+      free: false as const,
       orderId: order.id,
       amount: amountPaise,
       currency: "INR",
       keyId: await getRazorpayPublicKeyId(),
     };
+  },
+
+  /** Every side effect of a Purchase becoming PAID, whichever path confirmed it. */
+  async _afterPaid(purchase: {
+    id: string;
+    userId: string;
+    purchasableType: PurchasableType;
+    feedItemId: string | null;
+    tutorSessionRequestId: string | null;
+    installmentId: string | null;
+  }) {
+    await purchaseService._confirmLinkedTutorSession(purchase.tutorSessionRequestId);
+    await purchaseService._grantTutorLmsAccess(purchase.userId, purchase.purchasableType, purchase.feedItemId);
+    await purchaseService._grantPracticeLabAccess(purchase);
+    await purchaseService._settleInstallment(purchase.purchasableType, purchase.installmentId);
   },
 
   /** Side effect once a Purchase is confirmed PAID: if it's paying for a tutor session, move that request to CONFIRMED. */
@@ -175,10 +236,7 @@ export const purchaseService = {
     });
     const paid = await prisma.purchase.findUniqueOrThrow({ where: { id: purchase.id } });
     if (count === 0) return paid; // the webhook got there first
-    await purchaseService._confirmLinkedTutorSession(paid.tutorSessionRequestId);
-    await purchaseService._grantTutorLmsAccess(paid.userId, paid.purchasableType, paid.feedItemId);
-    await purchaseService._grantPracticeLabAccess(paid);
-    await purchaseService._settleInstallment(paid.purchasableType, paid.installmentId);
+    await purchaseService._afterPaid(paid);
     return paid;
   },
 
@@ -195,10 +253,7 @@ export const purchaseService = {
       data: { status: "PAID", razorpayPaymentId },
     });
     if (count === 0) return; // the client-side verify call got there first
-    await purchaseService._confirmLinkedTutorSession(purchase.tutorSessionRequestId);
-    await purchaseService._grantTutorLmsAccess(purchase.userId, purchase.purchasableType, purchase.feedItemId);
-    await purchaseService._grantPracticeLabAccess(purchase);
-    await purchaseService._settleInstallment(purchase.purchasableType, purchase.installmentId);
+    await purchaseService._afterPaid(purchase);
   },
 
   /** @deprecated Use contentAccessService.hasAccess({ type: "LEARNING_PATH", id }) directly — kept as a thin wrapper for existing call sites. */
